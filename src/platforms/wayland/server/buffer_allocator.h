@@ -1,0 +1,54 @@
+/*
+ * Copyright © 2017 The Ubports project.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Authored by:
+ *   Marius Gripsgard <marius@ubports.com>
+ */
+
+#ifndef MIR_PLATFORMS_WAYLAND_BUFFER_ALLOCATOR_
+#define MIR_PLATFORMS_WAYLAND_BUFFER_ALLOCATOR_
+
+#include "mir/graphics/graphic_buffer_allocator.h"
+#include "mir/graphics/buffer_id.h"
+
+#include <memory>
+
+namespace mir
+{
+namespace graphics
+{
+
+namespace wayland
+{
+
+class BufferAllocator: public graphics::GraphicBufferAllocator
+{
+public:
+    BufferAllocator();
+
+    std::shared_ptr<Buffer> alloc_buffer(graphics::BufferProperties const& buffer_properties) override;
+
+    std::shared_ptr<Buffer> alloc_software_buffer(geometry::Size size, MirPixelFormat format) override;
+    std::shared_ptr<Buffer> alloc_buffer(
+        geometry::Size size, uint32_t native_format, uint32_t native_flags) override;
+
+    std::vector<MirPixelFormat> supported_pixel_formats() override;
+};
+
+}
+}
+}
+
+#endif // MIR_PLATFORMS_WAYLAND_BUFFER_ALLOCATOR_

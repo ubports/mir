@@ -74,4 +74,8 @@ if (MIR_BUILD_PLATFORM_EGLSTREAM_KMS)
   add_subdirectory(eglstream-kms)
 endif()
 
+if (MIR_BUILD_PLATFORM_WAYLAND)
+  add_subdirectory(wayland)
+endif()
+
 add_subdirectory(evdev/)

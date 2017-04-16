@@ -3,3 +3,4 @@
 include/server/mir/version.h
 include/client/mir_toolkit/version.h
 build-*
+*.gch

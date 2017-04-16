@@ -174,7 +174,7 @@ add_definitions(-DMESA_EGL_NO_X11_HEADERS)
 # Default to KMS backend, but build all of them
 set(
   MIR_PLATFORM
-  mesa-kms;android;mesa-x11;eglstream-kms
+  mesa-kms;android;mesa-x11;eglstream-kms;wayland
   CACHE
   STRING
   "a list of graphics backends to build (options are 'mesa-kms', 'android', 'mesa-x11', or 'eglstream-kms')"
@@ -196,6 +196,9 @@ foreach(platform IN LISTS MIR_PLATFORM)
   endif()
   if (platform STREQUAL "eglstream-kms")
      set(MIR_BUILD_PLATFORM_EGLSTREAM_KMS TRUE)
+  endif()
+  if (platform STREQUAL "wayland")
+     set(MIR_BUILD_PLATFORM_WAYLAND TRUE)
   endif()
 endforeach(platform)
 
@@ -270,6 +273,10 @@ endif()
 if (MIR_BUILD_PLATFORM_EGLSTREAM_KMS)
   pkg_check_modules(EPOXY REQUIRED epoxy)
   pkg_check_modules(DRM REQUIRED libdrm)
+endif()
+
+if (MIR_BUILD_PLATFORM_WAYLAND)
+  pkg_check_modules(EPOXY REQUIRED epoxy)
 endif()
 
 set(MIR_TRACEPOINT_LIB_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR}/mir/tools)
