@@ -86,7 +86,7 @@ void mgw::DisplayBuffer::swap_buffers()
      * the consequence of that would be the client scheduling the next frame
      * immediately without waiting, which is probably ideal anyway.
      */
-    int64_t ust_us, msc, sbc;
+//    int64_t ust_us, msc, sbc;
     last_frame->increment_now();
 
     /*

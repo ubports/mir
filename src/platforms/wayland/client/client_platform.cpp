@@ -192,6 +192,8 @@ uint32_t mclw::ClientPlatform::native_format_for(MirPixelFormat format) const
   return gbm_pf;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 uint32_t mclw::ClientPlatform::native_flags_for(MirBufferUsage, mir::geometry::Size size) const
 {
   printf("native_flags_for\n");
@@ -200,3 +202,4 @@ uint32_t mclw::ClientPlatform::native_flags_for(MirBufferUsage, mir::geometry::S
       bo_flags |= GBM_BO_USE_SCANOUT;
   return bo_flags;
 }
+#pragma GCC diagnostic pop
