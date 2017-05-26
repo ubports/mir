@@ -59,7 +59,20 @@ void mcla::EGLNativeSurfaceInterpreter::driver_returns_buffer(ANativeWindowBuffe
 
 void mcla::EGLNativeSurfaceInterpreter::dispatch_driver_request_format(int format)
 {
-    driver_pixel_format = format;
+    /*
+     * Here, we use the hack to "lock" the format to the first one set by
+     * Android's libEGL at the EGL surface's creation time, which is the one
+     * chosen at the Mir window creation time, the one Mir server always
+     * acknowledge and acted upon. Some Android EGL implementation change this
+     * later, resulting in incompatibility between Mir client and server. By
+     * locking the format this way, the client will still render in the old
+     * format (rendering code hornor the setting here).
+     * TODO: find a way to communicate the format change back to the server. I
+     * believe there must be a good reason to change the rendering format
+     * (maybe for performance reason?).
+     */
+    if (driver_pixel_format == -1 || driver_pixel_format == 0 || format == 0)
+        driver_pixel_format = format;
 }
 
 int mcla::EGLNativeSurfaceInterpreter::driver_requests_info(int key) const
