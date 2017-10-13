@@ -1,3 +1,9 @@
+mir (0.24.20ubuntu11+ubports) xenial; urgency=medium
+
+  * Imported to UBports
+
+ -- UBports auto importer <infra@ubports.com>  Fri, 13 Oct 2017 02:11:20 +0200
+
 mir (0.24.2-0ubuntu1) UNRELEASED; urgency=medium
 
   * New upstream release 0.24.1 (https://launchpad.net/mir/+milestone/0.24.1)
