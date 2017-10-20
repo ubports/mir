@@ -8,7 +8,7 @@ install(PROGRAMS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/mir_performance_tests
 mir_add_wrapped_executable(mir_glmark2_performance_test
   test_glmark2-es2-mir.cpp
 )
-add_dependencies(mir_glmark2_performance_test GMock)
+
 target_link_libraries(mir_glmark2_performance_test
   mir-test-static
   mir-test-framework-static
@@ -35,3 +35,6 @@ target_link_libraries(mir_client_startup_performance_test
   ${GTEST_BOTH_LIBRARIES}
 )
 
+add_dependencies(mir_glmark2_performance_test GMock)
+add_dependencies(mir_compositor_performance_test GMock)
+add_dependencies(mir_client_startup_performance_test GMock)
