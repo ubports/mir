@@ -24,7 +24,7 @@ Build-Depends: cmake,
                libglm-dev,
                libprotobuf-dev,
                pkg-config,
-               android-headers-23,
+               android-headers-24,
                libhardware-dev [i386 amd64 armhf arm64],
                libandroid-properties-dev [i386 amd64 armhf arm64],
                libgoogle-glog-dev,
@@ -100,7 +100,7 @@ Section: libdevel
 Architecture: linux-any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
-Depends: libmircommon6 (= ${binary:Version}), 
+Depends: libmircommon6 (= ${binary:Version}),
          libprotobuf-dev (>= 2.4.1),
          libxkbcommon-dev,
          ${misc:Depends},
