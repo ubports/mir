@@ -72,12 +72,11 @@ bool mgm::KMSPageFlipper::schedule_flip(uint32_t crtc_id, uint32_t fb_id)
 
 void mgm::KMSPageFlipper::wait_for_flip(uint32_t crtc_id)
 {
-    static drmEventContext evctx =
-    {
-        DRM_EVENT_CONTEXT_VERSION,  /* .version */
-        0,  /* .vblank_handler */
-        page_flip_handler  /* .page_flip_handler */
-    };
+    drmEventContext evctx;
+    memset(&evctx, 0, sizeof evctx);
+    evctx.version = 2;  // We only support the old v2 page_flip_handler
+    evctx.page_flip_handler = &page_flip_handler;
+  
     static std::thread::id const invalid_tid;
 
     {
