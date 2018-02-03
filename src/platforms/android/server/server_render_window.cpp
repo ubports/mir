@@ -26,6 +26,7 @@
 #include "interpreter_resource_cache.h"
 
 #include <system/window.h>
+#include <system/graphics.h>
 #include <boost/throw_exception.hpp>
 #include <stdexcept>
 #include <sstream>
@@ -94,6 +95,8 @@ int mga::ServerRenderWindow::driver_requests_info(int key) const
             return NATIVE_WINDOW_FRAMEBUFFER;
         case NATIVE_WINDOW_CONSUMER_USAGE_BITS:
             return GRALLOC_USAGE_HW_RENDER | GRALLOC_USAGE_HW_COMPOSER | GRALLOC_USAGE_HW_FB;
+        case NATIVE_WINDOW_DEFAULT_DATASPACE:
+            return HAL_DATASPACE_UNKNOWN;
         default:
             {
             std::stringstream sstream;
