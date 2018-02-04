@@ -21,6 +21,7 @@
 #include "mir/frontend/client_constants.h"
 #include "mir/client_buffer.h"
 #include <system/window.h>
+#include <system/graphics.h>
 #include <hardware/gralloc.h>
 #include <stdexcept>
 
@@ -98,6 +99,8 @@ int mcla::EGLNativeSurfaceInterpreter::driver_requests_info(int key) const
                 return hardware_bits;
             else
                 return software_bits;
+        case NATIVE_WINDOW_DEFAULT_DATASPACE:
+            return HAL_DATASPACE_UNKNOWN;
         default:
             throw std::runtime_error("driver requested unsupported query");
     }
