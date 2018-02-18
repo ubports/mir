@@ -1,5 +1,6 @@
-mir (0.29.0) UNRELEASED; urgency=medium
+mir (0.29.0+ubports1) xenial; urgency=medium
 
+  [ Alan Griffiths ]
   * New upstream release 0.29.0(https://launchpad.net/mir/+milestone/0.29.0)
     - ABI summary:
       . mirclient ABI unchanged at 9
