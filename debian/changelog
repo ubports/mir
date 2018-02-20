@@ -1,9 +1,3 @@
-mir (0.24.20ubuntu11+ubports01) xenial; urgency=medium
-
-  * Fix segfault caused by trying to reuse a va_list
-
- -- Dalton Durst <dalton@ubports.com>  Mon, 19 Feb 2018 08:04:20 -0600
-
 mir (0.24.20ubuntu11+ubports) xenial; urgency=medium
 
   * Imported to UBports
