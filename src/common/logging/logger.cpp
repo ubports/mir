@@ -29,7 +29,7 @@ void ml::Logger::log(char const* component, Severity severity, char const* forma
 {
     auto const bufsize = 4096;
     va_list va;
-    va_start(va, format);
+    va_copy(va, format);
     char message[bufsize];
     vsnprintf(message, bufsize, format, va);
     va_end(va);
