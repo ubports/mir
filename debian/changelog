@@ -1,4 +1,4 @@
-mir (0.29.0+ubports1) xenial; urgency=medium
+mir (0.29.1+ubports1) bionic; urgency=medium
 
   [ Alan Griffiths ]
   * New upstream release 0.29.0(https://launchpad.net/mir/+milestone/0.29.0)
