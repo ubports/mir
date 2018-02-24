@@ -19,6 +19,7 @@
 #include "mir/log.h"
 #include "mir/logging/logger.h"
 #include <cstdio>
+#include <stdarg.h>
 
 namespace mir {
 
