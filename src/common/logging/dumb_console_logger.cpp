@@ -46,9 +46,7 @@ void ml::DumbConsoleLogger::log(ml::Severity severity,
     std::cout << now << std::endl;
     std::cout << sizeof(now) << std::endl;
     std::cout << "%F %T" << std::endl;
-    &ts.tv_sec;
-    localtime(&ts.tv_sec);
-    std::cout << localtime(&ts.tv_sec) << std::endl;
+    std::cout << &ts.tv_sec << std::endl;
     auto offset = strftime(now, sizeof(now), "%F %T", localtime(&ts.tv_sec));
     snprintf(now+offset, sizeof(now)-offset, ".%06ld", ts.tv_nsec / 1000);
 
