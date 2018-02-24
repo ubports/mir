@@ -28,7 +28,8 @@ void logv(logging::Severity sev, char const* component,
 {
     char message[1024];
     int max = sizeof(message) - 1;
-    va_list my_va_copy = va_copy(va);
+    va_list my_va_copy;
+    va_copy(my_va_copy, va);
     int len = vsnprintf(message, max, fmt, my_va_copy);
     if (len > max)
         len = max;
