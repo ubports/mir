@@ -1,3 +1,26 @@
+mir (0.31.0.1+0ubports2) bionic; urgency=medium
+
+  * Upstream master (currently 0.31)
+
+ -- Marius Gripsgard <marius@ubports.com>  Mon, 05 Mar 2018 14:47:27 +0100
+
+mir (0.30.0.1-0ubuntu1) bionic; urgency=medium
+
+  * New upstream release 0.30.0.1
+    - ABI unchanged
+  * Many fixes to Wayland support
+    - Wayland clients should now work in Unity8.
+    - Keyboard state is now sent of focus, resolving strange
+      modifier behaviour when switching between clients.
+    - A number of crash fixes
+    - Initial, experimental, support for xdg-shell (v6).
+      Set the MIR_EXPERIMENTAL_XDG_SHELL environment variable to enable.
+  * Pointer events are now sent to windows that move underneath the pointer
+  * debian/patches/fix-build-with-gcc-730.patch:
+    - Fix a build warning with GCC 7.3.0 from bionic-proposed
+
+ -- Christopher James Halse Rogers <raof@ubuntu.com>  Mon, 19 Feb 2018 15:42:39 +1100
+
 mir (0.29.1+ubports1) bionic; urgency=medium
 
   [ Alan Griffiths ]
