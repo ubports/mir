@@ -20,6 +20,7 @@
 
 #include "wayland_utils.h"
 #include "wl_mir_window.h"
+#include "wl_subcompositor.h"
 #include "wl_surface.h"
 #include "wl_seat.h"
 #include "xdg_shell_v6.h"
@@ -304,15 +305,12 @@ private:
 
 void SurfaceEventSink::send_resize(geometry::Size const& new_size) const
 {
-    if (window_size != new_size)
-    {
-        seat->spawn(run_unless(
-            destroyed,
-            [event_sink= event_sink, width = new_size.width.as_int(), height = new_size.height.as_int()]()
-            {
-                wl_shell_surface_send_configure(event_sink, WL_SHELL_SURFACE_RESIZE_NONE, width, height);
-            }));
-    }
+    seat->spawn(run_unless(
+        destroyed,
+        [event_sink= event_sink, width = new_size.width.as_int(), height = new_size.height.as_int()]()
+        {
+            wl_shell_surface_send_configure(event_sink, WL_SHELL_SURFACE_RESIZE_NONE, width, height);
+        }));
 }
 
 class WlShellSurface  : public wayland::ShellSurface, WlAbstractMirWindow
@@ -750,15 +748,14 @@ mf::WaylandConnector::WaylandConnector(
         display.get(),
         executor,
         this->allocator);
+    subcompositor_global = std::make_unique<mf::WlSubcompositor>(display.get());
     seat_global = std::make_unique<mf::WlSeat>(display.get(), input_hub, seat, executor);
     output_manager = std::make_unique<mf::OutputManager>(
         display.get(),
         display_config);
     shell_global = std::make_unique<mf::WlShell>(display.get(), shell, *seat_global);
     data_device_manager_global = std::make_unique<DataDeviceManager>(display.get());
-
-    // The XDG shell support is currently too flaky to enable by default
-    if (getenv("MIR_EXPERIMENTAL_XDG_SHELL"))
+    if (!getenv("MIR_DISABLE_XDG_SHELL_V6_UNSTABLE"))
         xdg_shell_global = std::make_unique<XdgShellV6>(display.get(), shell, *seat_global);
 
     wl_display_init_shm(display.get());

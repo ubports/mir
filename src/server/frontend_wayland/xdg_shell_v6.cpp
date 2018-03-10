@@ -25,6 +25,8 @@
 #include "wl_mir_window.h"
 
 #include "mir/scene/surface_creation_parameters.h"
+#include "mir/frontend/session.h"
+#include "mir/scene/surface.h"
 #include "mir/frontend/shell.h"
 #include "mir/optional_value.h"
 
@@ -60,7 +62,7 @@ public:
     void set_title(std::string const& title);
     void move(struct wl_resource* seat, uint32_t serial);
     void resize(struct wl_resource* /*seat*/, uint32_t /*serial*/, uint32_t edges);
-    void set_notify_resize(std::function<void(geometry::Size const& new_size)> notify_resize);
+    void set_notify_resize(std::function<void(geometry::Size const& new_size, MirWindowState state, bool active)> notify_resize);
     void set_max_size(int32_t width, int32_t height);
     void set_min_size(int32_t width, int32_t height);
     void set_maximized();
@@ -85,7 +87,8 @@ public:
 
     void send_resize(geometry::Size const& new_size) const override;
 
-    std::function<void(geometry::Size const& new_size)> notify_resize = [](auto){};
+    std::function<void(geometry::Size const& new_size, MirWindowState state, bool active)> notify_resize =
+        [](auto, auto, auto){};
 
 private:
     void post_configure(int serial) const;
@@ -153,6 +156,7 @@ public:
 
 }
 }
+namespace mf = mir::frontend;  // Keep CLion's parsing happy
 
 // XdgShellV6
 
@@ -247,8 +251,18 @@ void mf::XdgSurfaceV6::get_popup(uint32_t id, struct wl_resource* parent, struct
 
 void mf::XdgSurfaceV6::set_window_geometry(int32_t x, int32_t y, int32_t width, int32_t height)
 {
-    WlSurface::from(surface)->buffer_offset = geom::Displacement{-x, -y};
+    auto* const mir_surface = WlSurface::from(surface);
+    geom::Displacement const buffer_offset{-x, -y};
+
+    mir_surface->buffer_offset = buffer_offset;
     window_size = geom::Size{width, height};
+
+    if (surface_id.as_value())
+    {
+        spec().width = geom::Width{width};
+        spec().height = geom::Height{height};
+        invalidate_buffer_list();
+    }
 }
 
 void mf::XdgSurfaceV6::ack_configure(uint32_t serial)
@@ -336,7 +350,7 @@ void mf::XdgSurfaceV6::resize(struct wl_resource* /*seat*/, uint32_t /*serial*/,
     }
 }
 
-void mf::XdgSurfaceV6::set_notify_resize(std::function<void(geometry::Size const& new_size)> notify_resize)
+void mf::XdgSurfaceV6::set_notify_resize(std::function<void(geometry::Size const&, MirWindowState, bool)> notify_resize)
 {
     sink->notify_resize = notify_resize;
 }
@@ -436,15 +450,12 @@ mf::XdgSurfaceV6EventSink::XdgSurfaceV6EventSink(WlSeat* seat, wl_client* client
 
 void mf::XdgSurfaceV6EventSink::send_resize(geometry::Size const& new_size) const
 {
-    if (window_size != new_size)
-    {
-        seat->spawn(run_unless(destroyed, [this, new_size]()
-            {
-                auto const serial = wl_display_next_serial(wl_client_get_display(client));
-                notify_resize(new_size);
-                zxdg_surface_v6_send_configure(event_sink, serial);
-            }));
-    }
+    seat->spawn(run_unless(destroyed, [this, new_size]()
+        {
+            auto const serial = wl_display_next_serial(wl_client_get_display(client));
+            notify_resize(new_size, state(), is_active());
+            zxdg_surface_v6_send_configure(event_sink, serial);
+        }));
 }
 
 void mf::XdgSurfaceV6EventSink::post_configure(int serial) const
@@ -481,12 +492,38 @@ mf::XdgToplevelV6::XdgToplevelV6(struct wl_client* client, struct wl_resource* p
       self{self}
 {
     self->set_notify_resize(
-        [this](geom::Size const& new_size)
+        [this, client](geom::Size const& new_size, MirWindowState state, bool active)
         {
             wl_array states;
             wl_array_init(&states);
 
+            if (active)
+            {
+                if (uint32_t *state = static_cast<decltype(state)>(wl_array_add(&states, sizeof *state)))
+                    *state = ZXDG_TOPLEVEL_V6_STATE_ACTIVATED;
+            }
+
+            switch (state)
+            {
+            case mir_window_state_maximized:
+            case mir_window_state_horizmaximized:
+            case mir_window_state_vertmaximized:
+                if (uint32_t *state = static_cast<decltype(state)>(wl_array_add(&states, sizeof *state)))
+                    *state = ZXDG_TOPLEVEL_V6_STATE_MAXIMIZED;
+                break;
+
+            case mir_window_state_fullscreen:
+                if (uint32_t *state = static_cast<decltype(state)>(wl_array_add(&states, sizeof *state)))
+                    *state = ZXDG_TOPLEVEL_V6_STATE_FULLSCREEN;
+                break;
+
+            default:
+                break;
+            }
+
             zxdg_toplevel_v6_send_configure(resource, new_size.width.as_int(), new_size.height.as_int(), &states);
+
+            wl_array_release(&states);
         });
 }
 
