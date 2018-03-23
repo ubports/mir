@@ -50,5 +50,9 @@ is_appropriate_module(mcl::ClientContext* context)
     MirModuleProperties server_graphics_module;
     context->populate_graphics_module(server_graphics_module);
 
+#ifdef ANDROID_CAF
+    return (strncmp("mir:android-caf", server_graphics_module.name, strlen("mir:android-caf")) == 0);
+#else
     return (strncmp("mir:android", server_graphics_module.name, strlen("mir:android")) == 0);
+#endif
 }

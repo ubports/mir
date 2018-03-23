@@ -44,6 +44,7 @@
 #include <boost/throw_exception.hpp>
 #include <stdexcept>
 #include <mutex>
+#include <string.h>
 
 namespace mg=mir::graphics;
 namespace mga=mir::graphics::android;
@@ -219,15 +220,27 @@ mg::PlatformPriority probe_graphics_platform(mo::ProgramOption const& /*options*
     int err;
     hw_module_t const* hw_module;
 
-    err = hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &hw_module);
+    err = hw_get_module(HWC_HARDWARE_MODULE_ID, &hw_module);
+    if (err < 0) return mg::PlatformPriority::unsupported;
 
-    return err < 0 ? mg::PlatformPriority::unsupported : mg::PlatformPriority::best;
+#ifdef ANDROID_CAF
+    // LAZY HACK to check for qcom hardware
+    if (strcmp(hw_module->author, "CodeAurora Forum") == 0)
+      return static_cast<mg::PlatformPriority>(mg::PlatformPriority::best + 1);
+    return mg::PlatformPriority::unsupported;
+#else
+    return mg::PlatformPriority::best;
+#endif
 }
 
 namespace
 {
 mir::ModuleProperties const description = {
+#ifdef ANDROID_CAF
+    "mir:android-caf",
+#else
     "mir:android",
+#endif
     MIR_VERSION_MAJOR,
     MIR_VERSION_MINOR,
     MIR_VERSION_MICRO,

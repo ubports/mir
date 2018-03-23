@@ -25,6 +25,7 @@ Build-Depends: cmake,
                libprotobuf-dev,
                pkg-config,
                android-headers-24,
+               android-headers-24-caf,
                libhardware-dev [i386 amd64 armhf arm64],
                libandroid-properties-dev [i386 amd64 armhf arm64],
                libgoogle-glog-dev,
@@ -344,6 +345,21 @@ Description: Display server for Ubuntu - platform library for Android
  Contains the shared libraries required for the Mir server to interact with
  the hardware platform using the Android drivers.
 
+
+Package: mir-platform-graphics-android-caf10
+Section: libs
+Architecture: i386 amd64 armhf arm64
+Multi-Arch: same
+Pre-Depends: ${misc:Pre-Depends}
+Depends: ${misc:Depends},
+         ${shlibs:Depends},
+Description: Display server for Ubuntu - platform library for Android (caf)
+ Mir is a display server running on linux systems, with a focus on efficiency,
+ robust operation and a well-defined driver model.
+ .
+ Contains the shared libraries required for the Mir server to interact with
+ the hardware platform using the Android (caf) drivers.
+
 Package: mir-platform-input-evdev5
 Section: libs
 Architecture: linux-any
@@ -400,6 +416,21 @@ Description: Display server for Ubuntu - client platform library for Android
  Contains the shared libraries required for the Mir clients to interact with
  the underlying hardware platform using the Android drivers.
 
+
+Package: mir-client-platform-android-caf5
+Section: libs
+Architecture: i386 amd64 armhf arm64
+Multi-Arch: same
+Pre-Depends: ${misc:Pre-Depends}
+Depends: ${misc:Depends},
+         ${shlibs:Depends}
+Description: Display server for Ubuntu - client platform library for Android (caf)
+ Mir is a display server running on linux systems, with a focus on efficiency,
+ robust operation and a well-defined driver model.
+ .
+ Contains the shared libraries required for the Mir clients to interact with
+ the underlying hardware platform using the Android (caf) drivers.
+
 Package: mir-graphics-drivers-desktop
 Section: libs
 Architecture: linux-any
@@ -432,6 +463,22 @@ Description: Display server for Ubuntu - android driver metapackage
  .
  This package depends on a full set of graphics drivers for running Mir on top
  of an existing Android driver stack.
+
+Package: mir-graphics-drivers-android-caf
+Section: libs
+Architecture: i386 amd64 armhf arm64
+Multi-Arch: same
+Pre-Depends: ${misc:Pre-Depends}
+Depends: ${misc:Depends},
+         mir-platform-graphics-android-caf10,
+         mir-client-platform-android-caf5,
+         mir-platform-input-evdev5,
+Description: Display server for Ubuntu - android (caf) driver metapackage
+ Mir is a display server running on linux systems, with a focus on efficiency,
+ robust operation and a well-defined driver model.
+ .
+ This package depends on a full set of graphics drivers for running Mir on top
+ of an existing Android (caf) driver stack.
 
 Package: libmircookie2
 Section: libs

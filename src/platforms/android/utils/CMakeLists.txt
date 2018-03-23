@@ -31,9 +31,15 @@ target_link_libraries(
   ${LIBHARDWARE_LIBRARIES}
 )
 
+target_include_directories(mir_android_diagnostics SYSTEM PRIVATE
+  ${LIBHARDWARE_INCLUDE_DIRS})
+
 mir_add_wrapped_executable(mir_demo_standalone_render_overlays
   render_overlays.cpp
 )
+
+target_include_directories(mir_demo_standalone_render_overlays SYSTEM PRIVATE
+  ${LIBHARDWARE_INCLUDE_DIRS})
 
 target_link_libraries(mir_demo_standalone_render_overlays
   mircommon
