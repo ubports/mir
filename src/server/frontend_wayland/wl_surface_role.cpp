@@ -16,12 +16,13 @@
  * Authored by: Christopher James Halse Rogers <christopher.halse.rogers@canonical.com>
  */
 
-#include <mir/shell/surface_specification.h>
-#include "wl_mir_window.h"
+#include "wl_surface_role.h"
 
 #include "wayland_utils.h"
 #include "wl_surface.h"
 #include "basic_surface_event_sink.h"
+
+#include "mir/shell/surface_specification.h"
 
 #include "mir/frontend/shell.h"
 #include "mir/frontend/session.h"
@@ -37,21 +38,6 @@ namespace frontend
 
 namespace
 {
-class NullWlMirWindow : public WlMirWindow
-{
-public:
-    void new_buffer_size(geometry::Size const& /*buffer_size*/) {}
-    void invalidate_buffer_list() {}
-    void commit() {}
-    void visiblity(bool /*visible*/) {}
-    void destroy() {}
-} null_wl_mir_window_instance;
-}
-
-WlMirWindow* const null_wl_mir_window_ptr = &null_wl_mir_window_instance;
-
-namespace
-{
 std::shared_ptr<scene::Surface> get_surface_for_id(std::shared_ptr<Session> const& session, SurfaceId surface_id)
 {
     return std::dynamic_pointer_cast<scene::Surface>(session->get_surface(surface_id));
@@ -62,7 +48,7 @@ WlAbstractMirWindow::WlAbstractMirWindow(wl_client* client, wl_resource* surface
     std::shared_ptr<Shell> const& shell)
         : destroyed{std::make_shared<bool>(false)},
           client{client},
-          surface{surface},
+          surface{WlSurface::from(surface)},
           event_sink{event_sink},
           shell{shell},
           params{std::make_unique<scene::SurfaceCreationParameters>(
@@ -97,32 +83,30 @@ shell::SurfaceSpecification& WlAbstractMirWindow::spec()
     return *pending_changes;
 }
 
-void WlAbstractMirWindow::commit()
+void WlAbstractMirWindow::commit(WlSurfaceState const& state)
 {
+    surface->commit(state);
+
     auto const session = get_session(client);
 
     if (surface_id.as_value())
     {
         auto const scene_surface = get_surface_for_id(session, surface_id);
 
-        if (window_size.is_set())
+        sink->latest_client_size(window_size());
+
+        if (!window_size_.is_set())
         {
-            sink->latest_client_size(window_size.value());
-        }
-        else if (scene_surface->size() != latest_buffer_size)
-        {
-            // If the window side isn't set explicitly assume it matches the latest buffer
-            sink->latest_client_size(latest_buffer_size);
             auto& new_size_spec = spec();
-            new_size_spec.width = latest_buffer_size.width;
-            new_size_spec.height = latest_buffer_size.height;
+            new_size_spec.width = window_size().width;
+            new_size_spec.height = window_size().height;
         }
 
         if (buffer_list_needs_refresh)
         {
             auto& buffer_list_spec = spec();
             buffer_list_spec.streams = std::vector<shell::StreamSpecification>();
-            WlSurface::from(surface)->populate_buffer_list(buffer_list_spec.streams.value());
+            surface->populate_buffer_list(buffer_list_spec.streams.value(), {});
             buffer_list_needs_refresh = false;
         }
 
@@ -133,18 +117,17 @@ void WlAbstractMirWindow::commit()
         return;
     }
 
-    auto* const mir_surface = WlSurface::from(surface);
     if (params->size == geometry::Size{})
-        params->size = window_size.is_set() ? window_size.value() : latest_buffer_size;
+        params->size = window_size();
     if (params->size == geometry::Size{})
         params->size = geometry::Size{640, 480};
 
     params->streams = std::vector<shell::StreamSpecification>{};
-    mir_surface->populate_buffer_list(params->streams.value());
+    surface->populate_buffer_list(params->streams.value(), {});
     buffer_list_needs_refresh = false;
 
     surface_id = shell->create_surface(session, *params, sink);
-    mir_surface->surface_id = surface_id;
+    surface->surface_id = surface_id;
 
     // The shell isn't guaranteed to respect the requested size
     auto const window = session->get_surface(surface_id);
@@ -154,17 +137,9 @@ void WlAbstractMirWindow::commit()
         sink->send_resize(client_size);
 }
 
-void WlAbstractMirWindow::new_buffer_size(geometry::Size const& buffer_size)
+geometry::Size WlAbstractMirWindow::window_size()
 {
-    latest_buffer_size = buffer_size;
-
-    // Sometimes, when using xdg-shell, qterminal creates an insanely tall buffer
-    if (latest_buffer_size.height > geometry::Height{10000})
-    {
-        log_warning("Insane buffer height sanitized: latest_buffer_size.height = %d (was %d)",
-                    1000, latest_buffer_size.height.as_int());
-        latest_buffer_size.height = geometry::Height{1000};
-    }
+     return window_size_.is_set()? window_size_.value() : surface->buffer_size();
 }
 
 void WlAbstractMirWindow::visiblity(bool visible)

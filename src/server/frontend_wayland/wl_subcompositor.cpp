@@ -21,6 +21,7 @@
 #include "wl_surface.h"
 
 namespace mf = mir::frontend;
+namespace geom = mir::geometry;
 
 mf::WlSubcompositor::WlSubcompositor(struct wl_display* display)
     : wayland::Subcompositor(display, 1)
@@ -37,10 +38,12 @@ void mf::WlSubcompositor::get_subsurface(struct wl_client* client, struct wl_res
     new WlSubsurface(client, resource, id, WlSurface::from(surface), WlSurface::from(parent));
 }
 
-mf::WlSubsurface::WlSubsurface(struct wl_client* client, struct wl_resource* object_parent, uint32_t id, WlSurface* surface, WlSurface* parent_surface)
+mf::WlSubsurface::WlSubsurface(struct wl_client* client, struct wl_resource* object_parent, uint32_t id,
+                               WlSurface* surface, WlSurface* parent_surface)
     : wayland::Subsurface(client, object_parent, id),
       surface{surface},
-      parent{parent_surface->add_child(this)}
+      parent{parent_surface->add_child(this)},
+      synchronized_{true}
 {
     surface->set_role(this);
 }
@@ -50,18 +53,32 @@ mf::WlSubsurface::~WlSubsurface()
     // unique pointer automatically removes `this` from parent child list
 
     invalidate_buffer_list();
-    surface->set_role(null_wl_mir_window_ptr);
+    surface->clear_role();
 }
 
-void mf::WlSubsurface::populate_buffer_list(std::vector<shell::StreamSpecification>& buffers) const
+void mf::WlSubsurface::populate_buffer_list(std::vector<shell::StreamSpecification>& buffers,
+                                            geometry::Displacement const& parent_offset) const
 {
-    surface->populate_buffer_list(buffers);
+    surface->populate_buffer_list(buffers, parent_offset);
+}
+
+bool mf::WlSubsurface::synchronized() const
+{
+    return synchronized_ || parent->synchronized();
+}
+
+void mf::WlSubsurface::parent_has_committed()
+{
+    if (cached_state && synchronized())
+    {
+        surface->commit(std::move(cached_state.value()));
+        cached_state = std::experimental::nullopt;
+    }
 }
 
 void mf::WlSubsurface::set_position(int32_t x, int32_t y)
 {
-    (void)x; (void)y;
-    // TODO
+    surface->set_buffer_offset(geom::Displacement{x, y});
 }
 
 void mf::WlSubsurface::place_above(struct wl_resource* sibling)
@@ -78,12 +95,12 @@ void mf::WlSubsurface::place_below(struct wl_resource* sibling)
 
 void mf::WlSubsurface::set_sync()
 {
-    // TODO
+    synchronized_ = true;
 }
 
 void mf::WlSubsurface::set_desync()
 {
-    // TODO
+    synchronized_ = false;
 }
 
 void mf::WlSubsurface::destroy()
@@ -91,21 +108,32 @@ void mf::WlSubsurface::destroy()
     wl_resource_destroy(resource);
 }
 
-void mf::WlSubsurface::new_buffer_size(geometry::Size const& buffer_size)
-{
-    (void)buffer_size;
-    // TODO
-}
-
 void mf::WlSubsurface::invalidate_buffer_list()
 {
     parent->invalidate_buffer_list();
 }
 
-void mf::WlSubsurface::commit()
+void mf::WlSubsurface::commit(WlSurfaceState const& state)
 {
-    invalidate_buffer_list();
-    // TODO: if in desync mode, immediately make the buffer get rendered
+    if (synchronized())
+    {
+        if (!cached_state)
+            cached_state = WlSurfaceState();
+
+        cached_state.value().update_from(state);
+    }
+    else
+    {
+        if (cached_state) // unusual
+        {
+            cached_state.value().update_from(state);
+            surface->commit(std::move(cached_state.value()));
+        }
+        else
+        {
+            surface->commit(state);
+        }
+    }
 }
 
 void mf::WlSubsurface::visiblity(bool visible)

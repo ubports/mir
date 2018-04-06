@@ -1,25 +1,17 @@
-if(${CMAKE_COMPILER_IS_GNUCXX})
-    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -flto")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -flto")
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -flto")
-    set(CMAKE_AR "gcc-ar")
-    set(CMAKE_NM "gcc-nm")
-    set(CMAKE_RANLIB "gcc-ranlib")
-endif()
-
 include_directories(
   ${PROJECT_SOURCE_DIR}/include/platform
   ${PROJECT_SOURCE_DIR}/include/client
   ${PROJECT_SOURCE_DIR}/include/server
 )
 
-set(MIRAL_ABI 2)
+set(MIRAL_ABI 3)
 set(symbol_map ${CMAKE_CURRENT_SOURCE_DIR}/symbols.map)
 set(miral_include ${PROJECT_SOURCE_DIR}/include/miral)
 
 add_library(mirclientcpp INTERFACE)
 
 add_library(miral-internal STATIC
+    active_outputs.cpp                  active_outputs.h
     basic_window_manager.cpp            basic_window_manager.h window_manager_tools_implementation.h
     coordinate_translator.cpp           coordinate_translator.h
     display_configuration_listeners.cpp display_configuration_listeners.h
@@ -27,14 +19,13 @@ add_library(miral-internal STATIC
     window_management_trace.cpp         window_management_trace.h
     xcursor_loader.cpp                  xcursor_loader.h
     xcursor.c                           xcursor.h
-                                        both_versions.h
                                         join_client_threads.h
+                                        window_info_defaults.h
 )
 
 set_source_files_properties(xcursor.c PROPERTIES COMPILE_DEFINITIONS _GNU_SOURCE)
 
 add_library(miral SHARED
-    active_outputs.cpp                  ${miral_include}/miral/active_outputs.h
     add_init_callback.cpp               ${miral_include}/miral/add_init_callback.h
     application.cpp                     ${miral_include}/miral/application.h
     application_authorizer.cpp          ${miral_include}/miral/application_authorizer.h
@@ -56,14 +47,9 @@ add_library(miral SHARED
     set_command_line_handler.cpp        ${miral_include}/miral/set_command_line_handler.h
     set_terminator.cpp                  ${miral_include}/miral/set_terminator.h
     set_window_management_policy.cpp    ${miral_include}/miral/set_window_management_policy.h
-    workspace_policy.cpp                ${miral_include}/miral/workspace_policy.h
     window_management_policy.cpp        ${miral_include}/miral/window_management_policy.h
     window_manager_tools.cpp            ${miral_include}/miral/window_manager_tools.h
-                                        ${miral_include}/miral/window_management_policy_addendum2.h
-                                        ${miral_include}/miral/window_management_policy_addendum3.h
-                                        ${miral_include}/miral/window_management_policy_addendum4.h
                                         ${miral_include}/miral/lambda_as_function.h
-                                        window_info_defaults.h
 )
 
 check_cxx_compiler_flag(-Wno-attribute-alias HAS_W_NO_ATTRIBUTE_ALIAS)
@@ -108,19 +94,20 @@ set_target_properties(miral
         LINK_DEPENDS ${symbol_map}
 )
 
-# clang generates slightly different symbols (but we don't care)
-if (CMAKE_COMPILER_IS_GNUCXX)
-    # Using dpkg-gensymbols only makes sense on Debian based distros
-    if (EXISTS /etc/debian_version)
-        find_program(MIR_DPKG_GENSYMBOLS dpkg-gensymbols)
-        if (MIR_DPKG_GENSYMBOLS)
-            add_custom_target(check-miral-symbols ALL
-                DEPENDS miral ${PROJECT_SOURCE_DIR}/debian/libmiral${MIRAL_ABI}.symbols
-                COMMAND rm -f ${CMAKE_CURRENT_BINARY_DIR}/libmiral${MIRAL_ABI}.symbols
-                COMMAND dpkg-gensymbols -e${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libmiral.so.${MIRAL_ABI} -plibmiral${MIRAL_ABI} -v${MIRAL_VERSION} -O${CMAKE_CURRENT_BINARY_DIR}/libmiral${MIRAL_ABI}.symbols
-                WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-                VERBATIM)
-        endif()
+
+
+if (CMAKE_COMPILER_IS_GNUCXX   AND  # clang generates slightly different symbols (but we don't care)
+    MIR_LINK_TIME_OPTIMIZATION AND  # g++ generates slightly different symbols without LTO (but we don't care)
+    EXISTS /etc/debian_version)     # Using dpkg-gensymbols only makes sense on Debian based distros
+
+    find_program(MIR_DPKG_GENSYMBOLS dpkg-gensymbols)
+    if (MIR_DPKG_GENSYMBOLS)
+        add_custom_target(check-miral-symbols ALL
+            DEPENDS miral ${PROJECT_SOURCE_DIR}/debian/libmiral${MIRAL_ABI}.symbols
+            COMMAND rm -f ${CMAKE_CURRENT_BINARY_DIR}/libmiral${MIRAL_ABI}.symbols
+            COMMAND dpkg-gensymbols -e${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libmiral.so.${MIRAL_ABI} -plibmiral${MIRAL_ABI} -v${MIRAL_VERSION} -O${CMAKE_CURRENT_BINARY_DIR}/libmiral${MIRAL_ABI}.symbols
+            WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+            VERBATIM)
     endif()
 endif()
 

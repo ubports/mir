@@ -21,7 +21,8 @@
 #define MIR_FRONTEND_WL_SUBSURFACE_H
 
 #include "generated/wayland_wrapper.h"
-#include "wl_mir_window.h"
+#include "wl_surface_role.h"
+#include "wl_surface.h"
 
 #include <vector>
 #include <memory>
@@ -48,14 +49,19 @@ private:
                         struct wl_resource* surface, struct wl_resource* parent) override;
 };
 
-class WlSubsurface: public WlMirWindow, wayland::Subsurface
+class WlSubsurface: public WlSurfaceRole, wayland::Subsurface
 {
 public:
     WlSubsurface(struct wl_client* client, struct wl_resource* object_parent, uint32_t id, WlSurface* surface,
                  WlSurface* parent_surface);
     ~WlSubsurface();
 
-    void populate_buffer_list(std::vector<shell::StreamSpecification>& buffers) const;
+    void populate_buffer_list(std::vector<shell::StreamSpecification>& buffers,
+                              geometry::Displacement const& parent_offset) const;
+
+    bool synchronized() const override;
+
+    void parent_has_committed();
 
 private:
     void set_position(int32_t x, int32_t y) override;
@@ -64,18 +70,18 @@ private:
     void set_sync() override;
     void set_desync() override;
 
-    void destroy() override; // overrides function in both WlMirWindow and wayland::Subsurface
+    void destroy() override; // overrides function in both WlSurfaceRole and wayland::Subsurface
 
-    virtual void new_buffer_size(geometry::Size const& buffer_size) override;
     void invalidate_buffer_list() override;
-    virtual void commit() override;
+    virtual void commit(WlSurfaceState const& state) override;
     virtual void visiblity(bool visible) override;
 
     WlSurface* surface;
-
     // manages parent/child relationship, but does not manage parent's memory
     // see WlSurface::add_child() for details
     std::unique_ptr<WlSurface, std::function<void(WlSurface*)>> parent;
+    bool synchronized_;
+    std::experimental::optional<WlSurfaceState> cached_state;
 };
 
 }

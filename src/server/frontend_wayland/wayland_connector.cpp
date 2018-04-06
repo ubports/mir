@@ -19,7 +19,7 @@
 #include "wayland_connector.h"
 
 #include "wayland_utils.h"
-#include "wl_mir_window.h"
+#include "wl_surface_role.h"
 #include "wl_subcompositor.h"
 #include "wl_surface.h"
 #include "wl_seat.h"
@@ -235,6 +235,11 @@ std::shared_ptr<mir::frontend::Session> get_session(wl_client* client)
     return nullptr;
 }
 
+int64_t mir_input_event_get_event_time_ms(const MirInputEvent* event)
+{
+    return mir_input_event_get_event_time(event) / 1000000;
+}
+
 class WlCompositor : public wayland::Compositor
 {
 public:
@@ -332,8 +337,7 @@ public:
 
     ~WlShellSurface() override
     {
-        auto* const mir_surface = WlSurface::from(surface);
-        mir_surface->set_role(null_wl_mir_window_ptr);
+        surface->clear_role();
     }
 
 protected:
@@ -344,9 +348,7 @@ protected:
 
     void set_toplevel() override
     {
-        auto* const mir_surface = WlSurface::from(surface);
-
-        mir_surface->set_role(this);
+        surface->set_role(this);
     }
 
     void set_transient(
@@ -381,8 +383,7 @@ protected:
             params->aux_rect_placement_offset_x = 0;
             params->aux_rect_placement_offset_y = 0;
 
-            auto* const mir_surface = WlSurface::from(surface);
-            mir_surface->set_role(this);
+            surface->set_role(this);
         }
     }
 
@@ -445,8 +446,7 @@ protected:
             params->aux_rect_placement_offset_x = 0;
             params->aux_rect_placement_offset_y = 0;
 
-            auto* const mir_surface = WlSurface::from(surface);
-            mir_surface->set_role(this);
+            surface->set_role(this);
         }
     }
 
@@ -493,7 +493,7 @@ protected:
         {
             if (auto session = get_session(client))
             {
-                shell->request_operation(session, surface_id, sink->latest_timestamp(), Shell::UserRequest::move);
+                shell->request_operation(session, surface_id, sink->latest_timestamp_ns(), Shell::UserRequest::move);
             }
         }
     }
@@ -546,7 +546,7 @@ protected:
                 shell->request_operation(
                     session,
                     surface_id,
-                    sink->latest_timestamp(),
+                    sink->latest_timestamp_ns(),
                     Shell::UserRequest::resize,
                     edge);
             }
