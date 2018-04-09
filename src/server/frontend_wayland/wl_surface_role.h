@@ -16,8 +16,8 @@
  * Authored by: Christopher James Halse Rogers <christopher.halse.rogers@canonical.com>
  */
 
-#ifndef MIR_FRONTEND_WL_MIR_WINDOW_H
-#define MIR_FRONTEND_WL_MIR_WINDOW_H
+#ifndef MIR_FRONTEND_WL_SURFACE_ROLE_H
+#define MIR_FRONTEND_WL_SURFACE_ROLE_H
 
 #include "mir/frontend/surface_id.h"
 #include "mir/geometry/displacement.h"
@@ -33,29 +33,31 @@ namespace mir
 {
 namespace scene
 {
-class SurfaceCreationParameters;
+struct SurfaceCreationParameters;
 }
 namespace shell
 {
-class SurfaceSpecification;
+struct SurfaceSpecification;
 }
 namespace frontend
 {
 class Shell;
 class BasicSurfaceEventSink;
+class WlSurface;
+struct WlSurfaceState;
 
-class WlMirWindow
+class WlSurfaceRole
 {
 public:
-    virtual void new_buffer_size(geometry::Size const& buffer_size) = 0;
+    virtual bool synchronized() const { return false; }
     virtual void invalidate_buffer_list() = 0;
-    virtual void commit() = 0;
+    virtual void commit(WlSurfaceState const& state) = 0;
     virtual void visiblity(bool visible) = 0;
     virtual void destroy() = 0;
-    virtual ~WlMirWindow() = default;
-} extern * const null_wl_mir_window_ptr;
+    virtual ~WlSurfaceRole() = default;
+};
 
-class WlAbstractMirWindow : public WlMirWindow
+class WlAbstractMirWindow : public WlSurfaceRole
 {
 public:
     WlAbstractMirWindow(wl_client* client, wl_resource* surface, wl_resource* event_sink,
@@ -68,28 +70,27 @@ public:
 protected:
     std::shared_ptr<bool> const destroyed;
     wl_client* const client;
-    wl_resource* const surface;
+    WlSurface* const surface;
     wl_resource* const event_sink;
     std::shared_ptr<frontend::Shell> const shell;
     std::shared_ptr<BasicSurfaceEventSink> sink;
 
     std::unique_ptr<scene::SurfaceCreationParameters> const params;
     SurfaceId surface_id;
-    optional_value<geometry::Size> window_size;
+    optional_value<geometry::Size> window_size_;
 
+    geometry::Size window_size();
     shell::SurfaceSpecification& spec();
+    void commit(WlSurfaceState const& state) override;
 
 private:
-    geometry::Size latest_buffer_size;
     std::unique_ptr<shell::SurfaceSpecification> pending_changes;
     bool buffer_list_needs_refresh = true;
 
-    void commit() override;
-    void new_buffer_size(geometry::Size const& buffer_size) override;
     void visiblity(bool visible) override;
 };
 
 }
 }
 
-#endif // MIR_FRONTEND_WL_MIR_WINDOW_H
+#endif // MIR_FRONTEND_WL_SURFACE_ROLE_H

@@ -23,10 +23,33 @@
 
 #include "mir/executor.h"
 #include "mir/client/event.h"
+#include "mir/frontend/session.h"
+#include "mir/frontend/surface.h"
+#include "mir/frontend/buffer_stream.h"
+#include "mir/geometry/displacement.h"
 
 #include <linux/input-event-codes.h>
 
 namespace mf = mir::frontend;
+using namespace mir::geometry;
+
+struct mf::WlPointer::Cursor
+{
+    virtual void apply_to(wl_resource* target) = 0;
+    virtual ~Cursor() = default;
+    Cursor() = default;
+
+    Cursor(Cursor const&) = delete;
+    Cursor& operator=(Cursor const&) = delete;
+};
+
+namespace
+{
+struct NullCursor : mf::WlPointer::Cursor
+{
+    void apply_to(wl_resource*) override {}
+};
+}
 
 mf::WlPointer::WlPointer(
     wl_client* client,
@@ -38,7 +61,8 @@ mf::WlPointer::WlPointer(
         display{wl_client_get_display(client)},
         executor{executor},
         on_destroy{on_destroy},
-        destroyed{std::make_shared<bool>(false)}
+        destroyed{std::make_shared<bool>(false)},
+        cursor{std::make_unique<NullCursor>()}
 {
 }
 
@@ -62,10 +86,12 @@ void mf::WlPointer::handle_event(MirInputEvent const* event, wl_resource* target
             if (*target_window_destroyed)
                 return;
 
+            cursor->apply_to(target);
+
             auto const serial = wl_display_next_serial(display);
             auto const event = mir_event_get_input_event(ev);
             auto const pointer_event = mir_input_event_get_pointer_event(event);
-            auto const buffer_offset = WlSurface::from(target)->buffer_offset;
+            auto const buffer_offset = WlSurface::from(target)->buffer_offset();
 
             switch(mir_pointer_event_action(pointer_event))
             {
@@ -73,7 +99,7 @@ void mf::WlPointer::handle_event(MirInputEvent const* event, wl_resource* target
                 case mir_pointer_action_button_up:
                 {
                     auto const current_set  = mir_pointer_event_buttons(pointer_event);
-                    auto const current_time = mir_input_event_get_event_time(event) / 1000;
+                    auto const current_time = mir_input_event_get_event_time_ms(event);
 
                     for (auto const& mapping :
                         {
@@ -132,14 +158,18 @@ void mf::WlPointer::handle_event(MirInputEvent const* event, wl_resource* target
 
                     auto x = mir_pointer_event_axis_value(pointer_event, mir_pointer_axis_x)-buffer_offset.dx.as_int();
                     auto y = mir_pointer_event_axis_value(pointer_event, mir_pointer_axis_y)-buffer_offset.dy.as_int();
-                    auto vscroll = mir_pointer_event_axis_value(pointer_event, mir_pointer_axis_vscroll);
-                    auto hscroll = mir_pointer_event_axis_value(pointer_event, mir_pointer_axis_hscroll);
+
+                    // libinput < 0.8 sent wheel click events with value 10. Since 0.8 the value is the angle of the click in
+                    // degrees. To keep backwards-compat with existing clients, we just send multiples of the click count.
+                    // Ref: https://github.com/wayland-project/weston/blob/master/libweston/libinput-device.c#L184
+                    auto vscroll = mir_pointer_event_axis_value(pointer_event, mir_pointer_axis_vscroll) * 10;
+                    auto hscroll = mir_pointer_event_axis_value(pointer_event, mir_pointer_axis_hscroll) * 10;
 
                     if ((x != last_x) || (y != last_y))
                     {
                         wl_pointer_send_motion(
                             resource,
-                            mir_input_event_get_event_time(event) / 1000,
+                            mir_input_event_get_event_time_ms(event),
                             wl_fixed_from_double(x),
                             wl_fixed_from_double(y));
 
@@ -149,28 +179,24 @@ void mf::WlPointer::handle_event(MirInputEvent const* event, wl_resource* target
                         if (wl_resource_get_version(resource) >= WL_POINTER_FRAME_SINCE_VERSION)
                             wl_pointer_send_frame(resource);
                     }
-                    if (vscroll != last_vscroll)
+                    if (vscroll != 0)
                     {
                         wl_pointer_send_axis(
                             resource,
-                            mir_input_event_get_event_time(event) / 1000,
+                            mir_input_event_get_event_time_ms(event),
                             WL_POINTER_AXIS_VERTICAL_SCROLL,
                             wl_fixed_from_double(vscroll));
-
-                        last_vscroll = vscroll;
 
                         if (wl_resource_get_version(resource) >= WL_POINTER_FRAME_SINCE_VERSION)
                             wl_pointer_send_frame(resource);
                     }
-                    if (hscroll != last_hscroll)
+                    if (hscroll != 0)
                     {
                         wl_pointer_send_axis(
                             resource,
-                            mir_input_event_get_event_time(event) / 1000,
+                            mir_input_event_get_event_time_ms(event),
                             WL_POINTER_AXIS_HORIZONTAL_SCROLL,
                             wl_fixed_from_double(hscroll));
-
-                        last_hscroll = hscroll;
 
                         if (wl_resource_get_version(resource) >= WL_POINTER_FRAME_SINCE_VERSION)
                             wl_pointer_send_frame(resource);
@@ -183,15 +209,74 @@ void mf::WlPointer::handle_event(MirInputEvent const* event, wl_resource* target
         }));
 }
 
+namespace
+{
+struct WlStreamCursor : mf::WlPointer::Cursor
+{
+    WlStreamCursor(std::shared_ptr<mf::Session> const session, std::shared_ptr<mf::BufferStream> const& stream, Displacement hotspot);
+    void apply_to(wl_resource* target) override;
+
+    std::shared_ptr<mf::Session>        const session;
+    std::shared_ptr<mf::BufferStream>   const stream;
+    Displacement        const hotspot;
+};
+
+struct WlHiddenCursor : mf::WlPointer::Cursor
+{
+    WlHiddenCursor(std::shared_ptr<mf::Session> const session);
+    void apply_to(wl_resource* target) override;
+
+    std::shared_ptr<mf::Session>        const session;
+};
+}
+
+
 void mf::WlPointer::set_cursor(uint32_t serial, std::experimental::optional<wl_resource*> const& surface, int32_t hotspot_x, int32_t hotspot_y)
 {
+    if (surface)
+    {
+        auto const cursor_stream = WlSurface::from(*surface)->stream;
+        Displacement const cursor_hotspot{hotspot_x, hotspot_y};
+
+        cursor = std::make_unique<WlStreamCursor>(get_session(client), cursor_stream, cursor_hotspot);
+    }
+    else
+    {
+        cursor = std::make_unique<WlHiddenCursor>(get_session(client));
+    }
+
     (void)serial;
-    (void)surface;
-    (void)hotspot_x;
-    (void)hotspot_y;
 }
 
 void mf::WlPointer::release()
 {
     wl_resource_destroy(resource);
+}
+
+WlStreamCursor::WlStreamCursor(
+    std::shared_ptr<mf::Session> const session,
+    std::shared_ptr<mf::BufferStream> const& stream,
+    Displacement hotspot) :
+    session{session},
+    stream{stream},
+    hotspot{hotspot}
+{
+}
+
+void WlStreamCursor::apply_to(wl_resource* target)
+{
+    auto const mir_window = session->get_surface(mf::WlSurface::from(target)->surface_id);
+    mir_window->set_cursor_stream(stream, hotspot);
+}
+
+WlHiddenCursor::WlHiddenCursor(
+    std::shared_ptr<mf::Session> const session) :
+    session{session}
+{
+}
+
+void WlHiddenCursor::apply_to(wl_resource* target)
+{
+    auto const mir_window = session->get_surface(mf::WlSurface::from(target)->surface_id);
+    mir_window->set_cursor_image({});
 }

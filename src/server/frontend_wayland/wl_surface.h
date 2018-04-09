@@ -14,7 +14,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  * Authored by: Christopher James Halse Rogers <christopher.halse.rogers@canonical.com>
- *              William Wold <william.wold@canonical.com>
  */
 
 #ifndef MIR_FRONTEND_WL_SURFACE_H
@@ -22,9 +21,13 @@
 
 #include "generated/wayland_wrapper.h"
 
+#include "wl_surface_role.h"
+
 #include "mir/frontend/buffer_stream_id.h"
 #include "mir/frontend/surface_id.h"
-#include <mir/geometry/displacement.h>
+
+#include "mir/geometry/displacement.h"
+#include "mir/geometry/size.h"
 
 #include <vector>
 
@@ -44,8 +47,42 @@ struct StreamSpecification;
 namespace frontend
 {
 class BufferStream;
-class WlMirWindow;
+class Session;
 class WlSubsurface;
+
+struct WlSurfaceState
+{
+    struct Callback
+    {
+        wl_resource* resource;
+        std::shared_ptr<bool> destroyed;
+    };
+
+    // if you add variables, don't forget to update this
+    void update_from(WlSurfaceState const& source);
+
+    // NOTE: buffer can be both nullopt and nullptr (I know, sounds dumb, but bare with me)
+    // if it's nullopt, there is not a new buffer and no value should be copied to current state
+    // if it's nullptr, there is a new buffer and it is a null buffer, which should replace the current buffer
+    std::experimental::optional<wl_resource*> buffer;
+
+    std::experimental::optional<geometry::Displacement> buffer_offset;
+    std::vector<Callback> frame_callbacks;
+};
+
+class NullWlSurfaceRole : public WlSurfaceRole
+{
+public:
+    NullWlSurfaceRole(WlSurface* surface);
+    void invalidate_buffer_list() override;
+    void commit(WlSurfaceState const& state) override;
+    void visiblity(bool /*visible*/) override;
+    void destroy() override;
+
+private:
+    WlSurface* const surface;
+};
+
 
 class WlSurface : public wayland::Surface
 {
@@ -58,30 +95,39 @@ public:
 
     ~WlSurface();
 
-    void set_role(WlMirWindow* role_);
-    std::shared_ptr<bool> destroyed_flag() const;
+    std::shared_ptr<bool> destroyed_flag() const { return destroyed; }
+    geometry::Displacement buffer_offset() const { return buffer_offset_; }
+    geometry::Size buffer_size() const { return buffer_size_; }
+    bool synchronized() const;
+
+    void set_role(WlSurfaceRole* role_);
+    void clear_role();
+    void set_buffer_offset(geometry::Displacement const& offset) { pending.buffer_offset = offset; }
     std::unique_ptr<WlSurface, std::function<void(WlSurface*)>> add_child(WlSubsurface* child);
     void invalidate_buffer_list();
-    void populate_buffer_list(std::vector<shell::StreamSpecification>& buffers) const;
+    void populate_buffer_list(std::vector<shell::StreamSpecification>& buffers,
+                              geometry::Displacement const& parent_offset) const;
+    void commit(WlSurfaceState const& state);
 
-    mir::frontend::BufferStreamId stream_id;
-    geometry::Displacement buffer_offset;
-    std::shared_ptr<mir::frontend::BufferStream> stream;
+    std::shared_ptr<mir::frontend::Session> const session;
+    mir::frontend::BufferStreamId const stream_id;
+    std::shared_ptr<mir::frontend::BufferStream> const stream;
     mir::frontend::SurfaceId surface_id;       // ID of any associated surface
 
     static WlSurface* from(wl_resource* resource);
 
 private:
-    void remove_child(WlSubsurface* child);
-
     std::shared_ptr<mir::graphics::WaylandAllocator> const allocator;
     std::shared_ptr<mir::Executor> const executor;
 
-    WlMirWindow* role;
+    NullWlSurfaceRole null_role;
+    WlSurfaceRole* role;
     std::vector<WlSubsurface*> children;
 
-    wl_resource* pending_buffer;
-    std::shared_ptr<std::vector<wl_resource*>> const pending_frames;
+    WlSurfaceState pending;
+    geometry::Displacement buffer_offset_;
+    geometry::Size buffer_size_;
+    std::shared_ptr<std::vector<WlSurfaceState::Callback>> const pending_frames;
     std::shared_ptr<bool> const destroyed;
 
     void destroy() override;

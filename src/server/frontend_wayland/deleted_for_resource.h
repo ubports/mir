@@ -1,5 +1,5 @@
 /*
- * Copyright © 2015-2018 Canonical Ltd.
+ * Copyright © 2018 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 3,
@@ -16,38 +16,19 @@
  * Authored by: Christopher James Halse Rogers <christopher.halse.rogers@canonical.com>
  */
 
-#ifndef MIR_FRONTEND_WAYLAND_UTILS_H
-#define MIR_FRONTEND_WAYLAND_UTILS_H
-
-#include "wayland_utils.h"
+#ifndef MIR_FRONTEND_DELETED_FOR_RESOURCE_H_
+#define MIR_FRONTEND_DELETED_FOR_RESOURCE_H_
 
 #include <memory>
 
-struct wl_client;
-struct MirInputEvent;
+struct wl_resource;
 
 namespace mir
 {
 namespace frontend
 {
-class Session;
-
-template<typename Callable>
-inline auto run_unless(std::shared_ptr<bool> const& condition, Callable&& callable)
-{
-    return [callable = std::move(callable), condition]()
-        {
-            if (*condition)
-                return;
-            callable();
-        };
-}
-
-std::shared_ptr<frontend::Session> get_session(wl_client* client);
-
-int64_t mir_input_event_get_event_time_ms(const MirInputEvent* event);
-
+std::shared_ptr<bool> deleted_flag_for_resource(wl_resource*resource);
 }
 }
 
-#endif // MIR_FRONTEND_WAYLAND_UTILS_H
+#endif //MIR_FRONTEND_DELETED_FOR_RESOURCE_H_

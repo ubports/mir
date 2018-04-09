@@ -1,29 +1,71 @@
-mir (0.31.0.1+0ubports2) bionic; urgency=medium
+mir (0.31.1) UNRELEASED; urgency=medium
 
-  * Upstream master (currently 0.31)
+  * New upstream release 0.31.1(https://github.com/orgs/MirServer/projects/4)
 
- -- Marius Gripsgard <marius@ubports.com>  Mon, 05 Mar 2018 14:47:27 +0100
+    - ABI summary:
+      . mirclient ABI unchanged at 9
+      . miral ABI unchanged at 3
+      . mirserver ABI unchanged at 46
+      . mircommon ABI unchanged at 7
+      . mirplatform ABI unchanged at 16
+      . mirprotobuf ABI unchanged at 3
+      . mirplatformgraphics ABI unchanged at 13
+      . mirclientplatform ABI unchanged at 5
+      . mirinputplatform ABI unchanged at 7
+      . mircore ABI unchanged at 1
+    - Enhancements:
+    - Bugs fixed:
+      . Fix a couple of warnings from g++ 8.0.1
+      . src/miral/CMakeLists.txt has some hardcoded compile flags.
+        These should be inherited from the parent project instead. (Fixes #266)
+      . [Wayland] Subcompositor fixes: subsurface offset issue and sync behavior
+      . [Wayland] stopped frame.done being called if frame has been destroyed
+      . [Wayland] Implement WlSurface::set_cursor(): Enable Wayland clients to
+        set and hide the cursor
+      . [Wayland] Configure new surfaces after attaching observers: For tiling,
+        we need to set the surface state to "maximized" so that Wayland clients
+        obey exactly. That wasn't working as the wayland_frontend wasn't being
+        notified of the actual state.
+      . Don't remember recent surface events after the input dispatcher is
+        stopped: The event "goes stale" and can cause a segfault.  (Fixes #276)
+      . [Wayland] Sequence xdg-top-level and xdg-surface configure events
+        correctly: qtwayland gets confused by receiving these event out of
+        order. (Fixes #280)
+      . [Wayland] fixed timestamp scaling. Fixes double-click.
 
-mir (0.30.0.1-0ubuntu1) bionic; urgency=medium
+ -- Alan Griffiths <alan.griffiths@canonical.com>  Tue, 27 Mar 2018 11:21:00 +0000
 
-  * New upstream release 0.30.0.1
-    - ABI unchanged
-  * Many fixes to Wayland support
-    - Wayland clients should now work in Unity8.
-    - Keyboard state is now sent of focus, resolving strange
-      modifier behaviour when switching between clients.
-    - A number of crash fixes
-    - Initial, experimental, support for xdg-shell (v6).
-      Set the MIR_EXPERIMENTAL_XDG_SHELL environment variable to enable.
-  * Pointer events are now sent to windows that move underneath the pointer
-  * debian/patches/fix-build-with-gcc-730.patch:
-    - Fix a build warning with GCC 7.3.0 from bionic-proposed
+mir (0.31.0) UNRELEASED; urgency=medium
 
- -- Christopher James Halse Rogers <raof@ubuntu.com>  Mon, 19 Feb 2018 15:42:39 +1100
+  * New upstream release 0.31.0(https://github.com/orgs/MirServer/projects/1)
+    - ABI summary:
+      . mirclient ABI unchanged at 9
+      . miral ABI bumped to 3
+      . mirserver ABI bumped to 46
+      . mircommon ABI unchanged at 7
+      . mirplatform ABI unchanged at 16
+      . mirprotobuf ABI unchanged at 3
+      . mirplatformgraphics ABI unchanged at 13
+      . mirclientplatform ABI unchanged at 5
+      . mirinputplatform ABI unchanged at 7
+      . mircore ABI unchanged at 1
+    - Enhancements:
+      . Miral version 2.0 - API cleanup and support for CSD initiated "resize"
+      . Reorganized examples and reworked miral server examples
+      . Better organization of, and fixes to, Wayland server code
+      . Initial support for Wayland xdg-shell
+    - Bugs fixed:
+      . [miral] CommandLineOption should accept lambdas (Fixes #215)
+      . [miral] Implement the policy addenda in WindowManagementTrace
+        (Fixes #192)
+      . [Wayland] Send repeat info (Fixes #180)
+      . Explicitly initialise glm matricies, (Fixes #200)
+      . KMS platform - fallback if crtc mode invalid (LP: #1661295)
 
-mir (0.29.1+ubports1) bionic; urgency=medium
+ -- Alan Griffiths <alan.griffiths@canonical.com>  Thu, 15 Mar 2018 11:21:00 +0000
 
-  [ Alan Griffiths ]
+mir (0.29.0) UNRELEASED; urgency=medium
+
   * New upstream release 0.29.0(https://launchpad.net/mir/+milestone/0.29.0)
     - ABI summary:
       . mirclient ABI unchanged at 9
