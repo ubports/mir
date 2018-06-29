@@ -21,16 +21,20 @@
 
 #include "generated/wayland_wrapper.h"
 
+#include "mir/geometry/point.h"
+
+#include <map>
+
 // from "mir_toolkit/events/event.h"
-struct MirInputEvent;
+struct MirTouchEvent;
 
 namespace mir
 {
-
 class Executor;
 
 namespace frontend
 {
+class WlSurface;
 
 class WlTouch : public wayland::Touch
 {
@@ -39,17 +43,18 @@ public:
         wl_client* client,
         wl_resource* parent,
         uint32_t id,
-        std::function<void(WlTouch*)> const& on_destroy,
-        std::shared_ptr<mir::Executor> const& executor);
+        std::function<void(WlTouch*)> const& on_destroy);
 
     ~WlTouch();
 
-    void handle_event(MirInputEvent const* event, wl_resource* target);
+    void handle_event(MirTouchEvent const* touch_ev, WlSurface* surface);
 
 private:
-    std::shared_ptr<mir::Executor> const executor;
     std::function<void(WlTouch*)> on_destroy;
-    std::shared_ptr<bool> const destroyed;
+    std::map<int32_t, WlSurface*> focused_surface_for_ids;
+
+    void handle_down(mir::geometry::Point position, WlSurface* surface, uint32_t time, int32_t id);
+    void handle_up(uint32_t time, int32_t id);
 
     void release() override;
 };

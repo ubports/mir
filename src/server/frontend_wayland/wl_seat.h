@@ -22,6 +22,7 @@
 #include "generated/wayland_wrapper.h"
 
 #include <unordered_map>
+#include <vector>
 
 // from "mir_toolkit/events/event.h"
 struct MirInputEvent;
@@ -41,9 +42,6 @@ class Keymap;
 }
 namespace frontend
 {
-template<class InputInterface>
-class InputCtx; // defined in wl_seat.cpp
-
 class WlPointer;
 class WlKeyboard;
 class WlTouch;
@@ -59,23 +57,44 @@ public:
 
     ~WlSeat();
 
-    void handle_pointer_event(wl_client* client, MirInputEvent const* input_event, wl_resource* target) const;
-    void handle_keyboard_event(wl_client* client, MirInputEvent const* input_event, wl_resource* target) const;
-    void handle_touch_event(wl_client* client, MirInputEvent const* input_event, wl_resource* target) const;
-    void handle_event(wl_client* client, MirKeymapEvent const* keymap_event, wl_resource* target) const;
-    void handle_event(wl_client* client, MirWindowEvent const* window_event, wl_resource* target) const;
+    static auto from(struct wl_resource* seat) -> WlSeat*;
+
+    void for_each_listener(wl_client* client, std::function<void(WlPointer*)> func);
+    void for_each_listener(wl_client* client, std::function<void(WlKeyboard*)> func);
+    void for_each_listener(wl_client* client, std::function<void(WlTouch*)> func);
 
     void spawn(std::function<void()>&& work);
 
+    class ListenerTracker
+    {
+    public:
+        virtual void focus_on(wl_client* client) = 0;
+
+        ListenerTracker() = default;
+        virtual ~ListenerTracker() = default;
+        ListenerTracker(ListenerTracker const&) = delete;
+        ListenerTracker& operator=(ListenerTracker const&) = delete;
+    };
+
+    void add_focus_listener(ListenerTracker* listener);
+    void remove_focus_listener(ListenerTracker* listener);
+    void notify_focus(wl_client* focus) const;
+
 private:
+    std::vector<ListenerTracker*> focus_listeners;
+
+    template<class T>
+    class ListenerList;
+
     class ConfigObserver;
 
     std::unique_ptr<mir::input::Keymap> const keymap;
     std::shared_ptr<ConfigObserver> const config_observer;
 
-    std::unique_ptr<std::unordered_map<wl_client*, InputCtx<WlPointer>>> const pointer;
-    std::unique_ptr<std::unordered_map<wl_client*, InputCtx<WlKeyboard>>> const keyboard;
-    std::unique_ptr<std::unordered_map<wl_client*, InputCtx<WlTouch>>> const touch;
+    // listener list are shared pointers so devices can keep them around long enough to remove themselves
+    std::shared_ptr<ListenerList<WlPointer>> const pointer_listeners;
+    std::shared_ptr<ListenerList<WlKeyboard>> const keyboard_listeners;
+    std::shared_ptr<ListenerList<WlTouch>> const touch_listeners;
 
     std::shared_ptr<input::InputDeviceHub> const input_hub;
     std::shared_ptr<input::Seat> const seat;

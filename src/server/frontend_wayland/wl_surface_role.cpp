@@ -18,6 +18,7 @@
 
 #include "wl_surface_role.h"
 
+#include "output_manager.h"
 #include "wayland_utils.h"
 #include "wl_surface.h"
 #include "basic_surface_event_sink.h"
@@ -30,6 +31,68 @@
 
 #include "mir/scene/surface.h"
 #include "mir/scene/surface_creation_parameters.h"
+
+namespace geom = mir::geometry;
+
+void mir::frontend::WlAbstractMirWindow::set_maximized()
+{
+    // We must process this request immediately (i.e. don't defer until commit())
+    set_state_now(mir_window_state_maximized);
+}
+
+void mir::frontend::WlAbstractMirWindow::unset_maximized()
+{
+    // We must process this request immediately (i.e. don't defer until commit())
+    set_state_now(mir_window_state_restored);
+}
+
+void mir::frontend::WlAbstractMirWindow::set_fullscreen(std::experimental::optional<struct wl_resource*> const& output)
+{
+    // We must process this request immediately (i.e. don't defer until commit())
+    if (surface_id_.as_value())
+    {
+        shell::SurfaceSpecification mods;
+        mods.state = mir_window_state_fullscreen;
+        mods.output_id = output_manager->output_id_for(client, output);
+        auto const session = get_session(client);
+        shell->modify_surface(session, surface_id_, mods);
+    }
+    else
+    {
+        params->state = mir_window_state_fullscreen;
+        if (output)
+            params->output_id = output_manager->output_id_for(client, output.value());
+        create_mir_window();
+    }
+}
+
+void mir::frontend::WlAbstractMirWindow::unset_fullscreen()
+{
+    // We must process this request immediately (i.e. don't defer until commit())
+    set_state_now(mir_window_state_restored);
+}
+
+void mir::frontend::WlAbstractMirWindow::set_minimized()
+{
+    // We must process this request immediately (i.e. don't defer until commit())
+    set_state_now(mir_window_state_minimized);
+}
+
+void mir::frontend::WlAbstractMirWindow::set_state_now(MirWindowState state)
+{
+    if (surface_id_.as_value())
+    {
+        shell::SurfaceSpecification mods;
+        mods.state = state;
+        auto const session = get_session(client);
+        shell->modify_surface(session, surface_id_, mods);
+    }
+    else
+    {
+        params->state = state;
+        create_mir_window();
+    }
+}
 
 namespace mir
 {
@@ -44,35 +107,46 @@ std::shared_ptr<scene::Surface> get_surface_for_id(std::shared_ptr<Session> cons
 }
 }
 
-WlAbstractMirWindow::WlAbstractMirWindow(wl_client* client, wl_resource* surface, wl_resource* event_sink,
-    std::shared_ptr<Shell> const& shell)
+WlAbstractMirWindow::WlAbstractMirWindow(WlSeat* seat, wl_client* client, WlSurface* surface,
+                                         std::shared_ptr<Shell> const& shell, OutputManager* output_manager)
         : destroyed{std::make_shared<bool>(false)},
           client{client},
-          surface{WlSurface::from(surface)},
-          event_sink{event_sink},
+          surface{surface},
           shell{shell},
+          output_manager{output_manager},
+          sink{std::make_shared<BasicSurfaceEventSink>(seat, client, surface, this)},
           params{std::make_unique<scene::SurfaceCreationParameters>(
-              scene::SurfaceCreationParameters().of_type(mir_window_type_freestyle))}
+                 scene::SurfaceCreationParameters().of_type(mir_window_type_freestyle))}
 {
 }
 
 WlAbstractMirWindow::~WlAbstractMirWindow()
 {
+    sink->disconnect();
     *destroyed = true;
-    if (surface_id.as_value())
+    if (surface_id_.as_value())
     {
         if (auto session = get_session(client))
         {
-            shell->destroy_surface(session, surface_id);
+            shell->destroy_surface(session, surface_id_);
         }
 
-        surface_id = {};
+        surface_id_ = {};
     }
 }
 
-void WlAbstractMirWindow::invalidate_buffer_list()
+void WlAbstractMirWindow::populate_spec_with_surface_data(shell::SurfaceSpecification& spec)
 {
-    buffer_list_needs_refresh = true;
+    spec.streams = std::vector<shell::StreamSpecification>();
+    spec.input_shape = std::vector<geom::Rectangle>();
+    surface->populate_surface_data(spec.streams.value(), spec.input_shape.value(), {});
+}
+
+void WlAbstractMirWindow::refresh_surface_data_now()
+{
+    shell::SurfaceSpecification surface_data_spec;
+    populate_spec_with_surface_data(surface_data_spec);
+    shell->modify_surface(get_session(client), surface_id_, surface_data_spec);
 }
 
 shell::SurfaceSpecification& WlAbstractMirWindow::spec()
@@ -89,9 +163,9 @@ void WlAbstractMirWindow::commit(WlSurfaceState const& state)
 
     auto const session = get_session(client);
 
-    if (surface_id.as_value())
+    if (surface_id_.as_value())
     {
-        auto const scene_surface = get_surface_for_id(session, surface_id);
+        auto const scene_surface = get_surface_for_id(session, surface_id_);
 
         sink->latest_client_size(window_size());
 
@@ -102,20 +176,24 @@ void WlAbstractMirWindow::commit(WlSurfaceState const& state)
             new_size_spec.height = window_size().height;
         }
 
-        if (buffer_list_needs_refresh)
+        if (state.surface_data_needs_refresh())
         {
-            auto& buffer_list_spec = spec();
-            buffer_list_spec.streams = std::vector<shell::StreamSpecification>();
-            surface->populate_buffer_list(buffer_list_spec.streams.value(), {});
-            buffer_list_needs_refresh = false;
+            populate_spec_with_surface_data(spec());
         }
 
         if (pending_changes)
-            shell->modify_surface(session, surface_id, *pending_changes);
+            shell->modify_surface(session, surface_id_, *pending_changes);
 
         pending_changes.reset();
         return;
     }
+
+    create_mir_window();
+}
+
+void WlAbstractMirWindow::create_mir_window()
+{
+    auto const session = get_session(client);
 
     if (params->size == geometry::Size{})
         params->size = window_size();
@@ -123,18 +201,17 @@ void WlAbstractMirWindow::commit(WlSurfaceState const& state)
         params->size = geometry::Size{640, 480};
 
     params->streams = std::vector<shell::StreamSpecification>{};
-    surface->populate_buffer_list(params->streams.value(), {});
-    buffer_list_needs_refresh = false;
+    params->input_shape = std::vector<geom::Rectangle>{};
+    surface->populate_surface_data(params->streams.value(), params->input_shape.value(), {});
 
-    surface_id = shell->create_surface(session, *params, sink);
-    surface->surface_id = surface_id;
+    surface_id_ = shell->create_surface(session, *params, sink);
 
     // The shell isn't guaranteed to respect the requested size
-    auto const window = session->get_surface(surface_id);
+    auto const window = session->get_surface(surface_id_);
     auto const client_size = window->client_size();
 
     if (client_size != params->size)
-        sink->send_resize(client_size);
+        handle_resize(client_size);
 }
 
 geometry::Size WlAbstractMirWindow::window_size()
@@ -144,15 +221,26 @@ geometry::Size WlAbstractMirWindow::window_size()
 
 void WlAbstractMirWindow::visiblity(bool visible)
 {
-    if (!surface_id.as_value())
+    if (!surface_id_.as_value())
         return;
 
     auto const session = get_session(client);
 
-    if (get_surface_for_id(session, surface_id)->visible() == visible)
+    auto mir_surface = get_surface_for_id(session, surface_id_);
+
+    if (mir_surface->visible() == visible)
         return;
 
-    spec().state = visible ? mir_window_state_restored : mir_window_state_hidden;
+    if (visible)
+    {
+        if (mir_surface->state() == mir_window_state_hidden)
+            spec().state = mir_window_state_restored;
+    }
+    else
+    {
+        if (mir_surface->state() != mir_window_state_hidden)
+            spec().state = mir_window_state_hidden;
+    }
 }
 
 }

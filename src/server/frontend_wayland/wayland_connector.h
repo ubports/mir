@@ -24,6 +24,7 @@
 #include "mir/optional_value.h"
 
 #include <wayland-server-core.h>
+#include <unordered_map>
 #include <thread>
 
 namespace mir
@@ -82,6 +83,8 @@ public:
 
     void run_on_wayland_display(std::function<void(wl_display*)> const& functor);
 
+    auto socket_name() const -> optional_value<std::string> override;
+
 private:
     std::unique_ptr<wl_display, void(*)(wl_display*)> const display;
     mir::Fd const pause_signal;
@@ -95,6 +98,10 @@ private:
     std::unique_ptr<XdgShellV6> xdg_shell_global;
     std::thread dispatch_thread;
     wl_event_source* pause_source;
+    std::string wayland_display;
+
+    // Only accessed on event loop
+    std::unordered_map<int, std::function<void(std::shared_ptr<Session> const& session)>> mutable connect_handlers;
 };
 }
 }

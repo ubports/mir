@@ -24,6 +24,9 @@
 #include "mir/geometry/size.h"
 #include "mir/optional_value.h"
 
+#include <mir_toolkit/common.h>
+
+#include <experimental/optional>
 #include <memory>
 
 struct wl_client;
@@ -43,14 +46,17 @@ namespace frontend
 {
 class Shell;
 class BasicSurfaceEventSink;
+class OutputManager;
 class WlSurface;
+class WlSeat;
 struct WlSurfaceState;
 
 class WlSurfaceRole
 {
 public:
     virtual bool synchronized() const { return false; }
-    virtual void invalidate_buffer_list() = 0;
+    virtual SurfaceId surface_id() const = 0;
+    virtual void refresh_surface_data_now() = 0;
     virtual void commit(WlSurfaceState const& state) = 0;
     virtual void visiblity(bool visible) = 0;
     virtual void destroy() = 0;
@@ -60,23 +66,35 @@ public:
 class WlAbstractMirWindow : public WlSurfaceRole
 {
 public:
-    WlAbstractMirWindow(wl_client* client, wl_resource* surface, wl_resource* event_sink,
-        std::shared_ptr<frontend::Shell> const& shell);
+    WlAbstractMirWindow(WlSeat* seat, wl_client* client, WlSurface* surface,
+                        std::shared_ptr<frontend::Shell> const& shell, OutputManager* output_manager);
 
     ~WlAbstractMirWindow() override;
 
-    void invalidate_buffer_list() override;
+    SurfaceId surface_id() const override { return surface_id_; };
+
+    void populate_spec_with_surface_data(shell::SurfaceSpecification& spec);
+    void refresh_surface_data_now() override;
+
+    void set_maximized();
+    void unset_maximized();
+    void set_fullscreen(std::experimental::optional<wl_resource*> const& output);
+    void unset_fullscreen();
+    void set_minimized();
+
+    void set_state_now(MirWindowState state);
+
+    virtual void handle_resize(geometry::Size const& new_size) = 0;
 
 protected:
     std::shared_ptr<bool> const destroyed;
     wl_client* const client;
     WlSurface* const surface;
-    wl_resource* const event_sink;
     std::shared_ptr<frontend::Shell> const shell;
-    std::shared_ptr<BasicSurfaceEventSink> sink;
+    OutputManager* output_manager;
+    std::shared_ptr<BasicSurfaceEventSink> const sink;
 
     std::unique_ptr<scene::SurfaceCreationParameters> const params;
-    SurfaceId surface_id;
     optional_value<geometry::Size> window_size_;
 
     geometry::Size window_size();
@@ -84,10 +102,12 @@ protected:
     void commit(WlSurfaceState const& state) override;
 
 private:
+    SurfaceId surface_id_;
     std::unique_ptr<shell::SurfaceSpecification> pending_changes;
-    bool buffer_list_needs_refresh = true;
 
     void visiblity(bool visible) override;
+
+    void create_mir_window();
 };
 
 }

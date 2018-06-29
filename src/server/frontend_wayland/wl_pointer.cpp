@@ -35,7 +35,7 @@ using namespace mir::geometry;
 
 struct mf::WlPointer::Cursor
 {
-    virtual void apply_to(wl_resource* target) = 0;
+    virtual void apply_to(WlSurface* surface) = 0;
     virtual ~Cursor() = default;
     Cursor() = default;
 
@@ -47,7 +47,7 @@ namespace
 {
 struct NullCursor : mf::WlPointer::Cursor
 {
-    void apply_to(wl_resource*) override {}
+    void apply_to(mf::WlSurface*) override {}
 };
 }
 
@@ -55,158 +55,184 @@ mf::WlPointer::WlPointer(
     wl_client* client,
     wl_resource* parent,
     uint32_t id,
-    std::function<void(WlPointer*)> const& on_destroy,
-    std::shared_ptr<mir::Executor> const& executor)
+    std::function<void(WlPointer*)> const& on_destroy)
     : Pointer(client, parent, id),
         display{wl_client_get_display(client)},
-        executor{executor},
         on_destroy{on_destroy},
-        destroyed{std::make_shared<bool>(false)},
         cursor{std::make_unique<NullCursor>()}
 {
 }
 
 mf::WlPointer::~WlPointer()
 {
-    *destroyed = true;
+    if (focused_surface)
+        focused_surface.value()->remove_destroy_listener(this);
     on_destroy(this);
 }
 
-void mf::WlPointer::handle_event(MirInputEvent const* event, wl_resource* target)
+void mf::WlPointer::handle_event(MirPointerEvent const* event, WlSurface* surface)
 {
-    executor->spawn(run_unless(
-        destroyed,
-        [
-            ev = mir::client::Event{mir_input_event_get_event(event)},
-            target,
-            target_window_destroyed = WlSurface::from(target)->destroyed_flag(),
-            this
-        ]()
+    switch(mir_pointer_event_action(event))
+    {
+        case mir_pointer_action_button_down:
+        case mir_pointer_action_button_up:
         {
-            if (*target_window_destroyed)
-                return;
+            auto const current_pointer_buttons  = mir_pointer_event_buttons(event);
+            auto const timestamp = mir_input_event_get_event_time_ms(mir_pointer_event_input_event(event));
 
-            cursor->apply_to(target);
-
-            auto const serial = wl_display_next_serial(display);
-            auto const event = mir_event_get_input_event(ev);
-            auto const pointer_event = mir_input_event_get_pointer_event(event);
-            auto const buffer_offset = WlSurface::from(target)->buffer_offset();
-
-            switch(mir_pointer_event_action(pointer_event))
+            for (auto const& mapping :
+                {
+                    std::make_pair(mir_pointer_button_primary, BTN_LEFT),
+                    std::make_pair(mir_pointer_button_secondary, BTN_RIGHT),
+                    std::make_pair(mir_pointer_button_tertiary, BTN_MIDDLE),
+                    std::make_pair(mir_pointer_button_back, BTN_BACK),
+                    std::make_pair(mir_pointer_button_forward, BTN_FORWARD),
+                    std::make_pair(mir_pointer_button_side, BTN_SIDE),
+                    std::make_pair(mir_pointer_button_task, BTN_TASK),
+                    std::make_pair(mir_pointer_button_extra, BTN_EXTRA)
+                })
             {
-                case mir_pointer_action_button_down:
-                case mir_pointer_action_button_up:
+                if (mapping.first & (current_pointer_buttons ^ last_buttons))
                 {
-                    auto const current_set  = mir_pointer_event_buttons(pointer_event);
-                    auto const current_time = mir_input_event_get_event_time_ms(event);
+                    auto const state = (mapping.first & current_pointer_buttons) ?
+                        WL_POINTER_BUTTON_STATE_PRESSED :
+                        WL_POINTER_BUTTON_STATE_RELEASED;
 
-                    for (auto const& mapping :
-                        {
-                            std::make_pair(mir_pointer_button_primary, BTN_LEFT),
-                            std::make_pair(mir_pointer_button_secondary, BTN_RIGHT),
-                            std::make_pair(mir_pointer_button_tertiary, BTN_MIDDLE),
-                            std::make_pair(mir_pointer_button_back, BTN_BACK),
-                            std::make_pair(mir_pointer_button_forward, BTN_FORWARD),
-                            std::make_pair(mir_pointer_button_side, BTN_SIDE),
-                            std::make_pair(mir_pointer_button_task, BTN_TASK),
-                            std::make_pair(mir_pointer_button_extra, BTN_EXTRA)
-                        })
-                    {
-                        if (mapping.first & (current_set ^ last_set))
-                        {
-                            auto const action = (mapping.first & current_set) ?
-                                                WL_POINTER_BUTTON_STATE_PRESSED :
-                                                WL_POINTER_BUTTON_STATE_RELEASED;
-
-                            wl_pointer_send_button(resource, serial, current_time, mapping.second, action);
-                            if (wl_resource_get_version(resource) >= WL_POINTER_FRAME_SINCE_VERSION)
-                                wl_pointer_send_frame(resource);
-                        }
-                    }
-
-                    last_set = current_set;
-                    break;
+                    auto const serial = wl_display_next_serial(display);
+                    wl_pointer_send_button(resource, serial, timestamp, mapping.second, state);
+                    handle_frame();
                 }
-                case mir_pointer_action_enter:
-                {
-                    wl_pointer_send_enter(
-                        resource,
-                        serial,
-                        target,
-                        wl_fixed_from_double(mir_pointer_event_axis_value(pointer_event, mir_pointer_axis_x)-buffer_offset.dx.as_int()),
-                        wl_fixed_from_double(mir_pointer_event_axis_value(pointer_event, mir_pointer_axis_y)-buffer_offset.dy.as_int()));
-                    if (wl_resource_get_version(resource) >= WL_POINTER_FRAME_SINCE_VERSION)
-                        wl_pointer_send_frame(resource);
-                    break;
-                }
-                case mir_pointer_action_leave:
-                {
-                    wl_pointer_send_leave(
-                        resource,
-                        serial,
-                        target);
-                    if (wl_resource_get_version(resource) >= WL_POINTER_FRAME_SINCE_VERSION)
-                        wl_pointer_send_frame(resource);
-                    break;
-                }
-                case mir_pointer_action_motion:
-                {
-                    // TODO: properly group vscroll and hscroll events in the same frame (as described by the frame
-                    //  event description in wayland.xml) and send axis_source, axis_stop and axis_discrete events where
-                    //  appropriate (may require significant reworking of the input system)
-
-                    auto x = mir_pointer_event_axis_value(pointer_event, mir_pointer_axis_x)-buffer_offset.dx.as_int();
-                    auto y = mir_pointer_event_axis_value(pointer_event, mir_pointer_axis_y)-buffer_offset.dy.as_int();
-
-                    // libinput < 0.8 sent wheel click events with value 10. Since 0.8 the value is the angle of the click in
-                    // degrees. To keep backwards-compat with existing clients, we just send multiples of the click count.
-                    // Ref: https://github.com/wayland-project/weston/blob/master/libweston/libinput-device.c#L184
-                    auto vscroll = mir_pointer_event_axis_value(pointer_event, mir_pointer_axis_vscroll) * 10;
-                    auto hscroll = mir_pointer_event_axis_value(pointer_event, mir_pointer_axis_hscroll) * 10;
-
-                    if ((x != last_x) || (y != last_y))
-                    {
-                        wl_pointer_send_motion(
-                            resource,
-                            mir_input_event_get_event_time_ms(event),
-                            wl_fixed_from_double(x),
-                            wl_fixed_from_double(y));
-
-                        last_x = x;
-                        last_y = y;
-
-                        if (wl_resource_get_version(resource) >= WL_POINTER_FRAME_SINCE_VERSION)
-                            wl_pointer_send_frame(resource);
-                    }
-                    if (vscroll != 0)
-                    {
-                        wl_pointer_send_axis(
-                            resource,
-                            mir_input_event_get_event_time_ms(event),
-                            WL_POINTER_AXIS_VERTICAL_SCROLL,
-                            wl_fixed_from_double(vscroll));
-
-                        if (wl_resource_get_version(resource) >= WL_POINTER_FRAME_SINCE_VERSION)
-                            wl_pointer_send_frame(resource);
-                    }
-                    if (hscroll != 0)
-                    {
-                        wl_pointer_send_axis(
-                            resource,
-                            mir_input_event_get_event_time_ms(event),
-                            WL_POINTER_AXIS_HORIZONTAL_SCROLL,
-                            wl_fixed_from_double(hscroll));
-
-                        if (wl_resource_get_version(resource) >= WL_POINTER_FRAME_SINCE_VERSION)
-                            wl_pointer_send_frame(resource);
-                    }
-                    break;
-                }
-                case mir_pointer_actions:
-                    break;
             }
-        }));
+
+            last_buttons = current_pointer_buttons;
+            break;
+        }
+        case mir_pointer_action_enter:
+        {
+            auto point = Point{mir_pointer_event_axis_value(event, mir_pointer_axis_x),
+                                        mir_pointer_event_axis_value(event, mir_pointer_axis_y)};
+            auto transformed = surface->transform_point(point);
+            if (transformed)
+            {
+                handle_enter(transformed.value().first, transformed.value().second);
+                handle_frame();
+            }
+            else
+            {
+                log_warning("surface->transform_point() returned nullopt for enter action");
+            }
+            break;
+        }
+        case mir_pointer_action_leave:
+        {
+            handle_leave();
+            handle_frame();
+            break;
+        }
+        case mir_pointer_action_motion:
+        {
+            // TODO: properly group vscroll and hscroll events in the same frame (as described by the frame
+            //  event description in wayland.xml) and send axis_source, axis_stop and axis_discrete events where
+            //  appropriate (may require significant reworking of the input system)
+
+            bool needs_frame = false;
+            auto const timestamp = mir_input_event_get_event_time_ms(mir_pointer_event_input_event(event));
+            auto point = Point{mir_pointer_event_axis_value(event, mir_pointer_axis_x),
+                                        mir_pointer_event_axis_value(event, mir_pointer_axis_y)};
+            auto transformed = surface->transform_point(point);
+
+            if (transformed && focused_surface && transformed.value().second == focused_surface.value())
+            {
+                if (!last_position || transformed.value().first != last_position.value())
+                {
+                    wl_pointer_send_motion(
+                        resource,
+                        timestamp,
+                        wl_fixed_from_double(transformed.value().first.x.as_int()),
+                        wl_fixed_from_double(transformed.value().first.y.as_int()));
+                    last_position = transformed.value().first;
+                    needs_frame = true;
+                }
+            }
+            else
+            {
+                if (focused_surface)
+                    handle_leave();
+                if (transformed)
+                    handle_enter(transformed.value().first, transformed.value().second);
+                else
+                    log_warning("surface->transform_point() returned nullopt for motion action");
+                needs_frame = true;
+            }
+
+            auto hscroll = mir_pointer_event_axis_value(event, mir_pointer_axis_hscroll) * 10;
+            if (hscroll != 0)
+            {
+                wl_pointer_send_axis(
+                    resource,
+                    timestamp,
+                    WL_POINTER_AXIS_HORIZONTAL_SCROLL,
+                    wl_fixed_from_double(hscroll));
+                needs_frame = true;
+            }
+
+            auto vscroll = mir_pointer_event_axis_value(event, mir_pointer_axis_vscroll) * 10;
+            if (vscroll != 0)
+            {
+                wl_pointer_send_axis(
+                    resource,
+                    timestamp,
+                    WL_POINTER_AXIS_VERTICAL_SCROLL,
+                    wl_fixed_from_double(vscroll));
+                needs_frame = true;
+            }
+
+            if (needs_frame)
+            {
+                handle_frame();
+            }
+            break;
+        }
+        case mir_pointer_actions:
+            break;
+    }
+}
+
+void mf::WlPointer::handle_enter(Point position, WlSurface* surface)
+{
+    cursor->apply_to(surface);
+    auto const serial = wl_display_next_serial(display);
+    wl_pointer_send_enter(
+        resource,
+        serial,
+        surface->raw_resource(),
+        wl_fixed_from_double(position.x.as_int()),
+        wl_fixed_from_double(position.y.as_int()));
+    surface->add_destroy_listener(this, [this]()
+        {
+            handle_leave();
+        });
+    focused_surface = surface;
+}
+
+void mf::WlPointer::handle_leave()
+{
+    if (!focused_surface)
+        return;
+    focused_surface.value()->remove_destroy_listener(this);
+    auto const serial = wl_display_next_serial(display);
+    wl_pointer_send_leave(
+        resource,
+        serial,
+        focused_surface.value()->raw_resource());
+    focused_surface = std::experimental::nullopt;
+    last_position = std::experimental::nullopt;
+}
+
+void mf::WlPointer::handle_frame()
+{
+    if (wl_resource_get_version(resource) >= WL_POINTER_FRAME_SINCE_VERSION)
+        wl_pointer_send_frame(resource);
 }
 
 namespace
@@ -214,7 +240,7 @@ namespace
 struct WlStreamCursor : mf::WlPointer::Cursor
 {
     WlStreamCursor(std::shared_ptr<mf::Session> const session, std::shared_ptr<mf::BufferStream> const& stream, Displacement hotspot);
-    void apply_to(wl_resource* target) override;
+    void apply_to(mf::WlSurface* surface) override;
 
     std::shared_ptr<mf::Session>        const session;
     std::shared_ptr<mf::BufferStream>   const stream;
@@ -224,7 +250,7 @@ struct WlStreamCursor : mf::WlPointer::Cursor
 struct WlHiddenCursor : mf::WlPointer::Cursor
 {
     WlHiddenCursor(std::shared_ptr<mf::Session> const session);
-    void apply_to(wl_resource* target) override;
+    void apply_to(mf::WlSurface* surface) override;
 
     std::shared_ptr<mf::Session>        const session;
 };
@@ -263,10 +289,14 @@ WlStreamCursor::WlStreamCursor(
 {
 }
 
-void WlStreamCursor::apply_to(wl_resource* target)
+void WlStreamCursor::apply_to(mf::WlSurface* surface)
 {
-    auto const mir_window = session->get_surface(mf::WlSurface::from(target)->surface_id);
-    mir_window->set_cursor_stream(stream, hotspot);
+    auto id = surface->surface_id();
+    if (id.as_value())
+    {
+        auto const mir_window = session->get_surface(id);
+        mir_window->set_cursor_stream(stream, hotspot);
+    }
 }
 
 WlHiddenCursor::WlHiddenCursor(
@@ -275,8 +305,12 @@ WlHiddenCursor::WlHiddenCursor(
 {
 }
 
-void WlHiddenCursor::apply_to(wl_resource* target)
+void WlHiddenCursor::apply_to(mf::WlSurface* surface)
 {
-    auto const mir_window = session->get_surface(mf::WlSurface::from(target)->surface_id);
-    mir_window->set_cursor_image({});
+    auto id = surface->surface_id();
+    if (id.as_value())
+    {
+        auto const mir_window = session->get_surface(id);
+        mir_window->set_cursor_image({});
+    }
 }

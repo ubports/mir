@@ -18,6 +18,7 @@ include_directories(
   ${PROJECT_SOURCE_DIR}/include/cookie
   ${PROJECT_SOURCE_DIR}/src/include/cookie
   ${GLIB_INCLUDE_DIRS}
+  ${GIO_INCLUDE_DIRS}
 )
 add_definitions(-DMIR_SERVER_INPUT_PLATFORM_VERSION="${MIR_SERVER_INPUT_PLATFORM_VERSION}")
 
@@ -33,6 +34,7 @@ add_subdirectory(frontend/)
 add_subdirectory(frontend_wayland/)
 add_subdirectory(shell/)
 add_subdirectory(thread/)
+add_subdirectory(console/)
 
 set(PREFIX "${CMAKE_INSTALL_PREFIX}")
 set(EXEC_PREFIX "${CMAKE_INSTALL_PREFIX}")
@@ -68,6 +70,7 @@ add_library(mirserverobjects OBJECT
   ${PROJECT_SOURCE_DIR}/src/include/server/mir/observer_multiplexer.h
   ${PROJECT_SOURCE_DIR}/src/include/server/mir/glib_main_loop.h
   ${PROJECT_SOURCE_DIR}/src/include/server/mir/glib_main_loop_sources.h
+  ${PROJECT_SOURCE_DIR}/src/include/server/mir/synchronised.h
 )
 
 set(MIR_SERVER_OBJECTS
@@ -87,6 +90,7 @@ set(MIR_SERVER_OBJECTS
   $<TARGET_OBJECTS:mirnestedgraphics>
   $<TARGET_OBJECTS:miroffscreengraphics>
   $<TARGET_OBJECTS:mirthread>
+  $<TARGET_OBJECTS:mirconsole>
 
   $<TARGET_OBJECTS:mirrenderergl>
   $<TARGET_OBJECTS:mirgl>
@@ -97,6 +101,7 @@ set(MIR_SERVER_REFERENCES
   ${GL_LDFLAGS} ${GL_LIBRARIES}
   ${UDEV_LDFLAGS} ${UDEV_LIBRARIES}
   ${GLIB_LDFLAGS} ${GLIB_LIBRARIES}
+  ${GIO_LDFLAGS} ${GIO_LIBRARIES}
   ${UUID_LDFLAGS} ${UUID_LIBRARIES}
 )
 
@@ -122,6 +127,7 @@ target_link_libraries(mirserver LINK_PUBLIC
   ${GL_LDFLAGS} ${GL_LIBRARIES}
   ${UDEV_LDFLAGS} ${UDEV_LIBRARIES}
   ${GLIB_LDFLAGS} ${GLIB_LIBRARIES}
+  ${GIO_LDFLAGS} ${GIO_LIBRARIES}
   ${UUID_LDFLAGS} ${UUID_LIBRARIES}
   ${WAYLAND_SERVER_LDFLAGS} ${WAYLAND_SERVER_LIBRARIES}
   atomic

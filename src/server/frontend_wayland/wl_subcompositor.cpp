@@ -17,8 +17,9 @@
  */
 
 #include "wl_subcompositor.h"
-
 #include "wl_surface.h"
+
+#include "mir/geometry/rectangle.h"
 
 namespace mf = mir::frontend;
 namespace geom = mir::geometry;
@@ -43,23 +44,26 @@ mf::WlSubsurface::WlSubsurface(struct wl_client* client, struct wl_resource* obj
     : wayland::Subsurface(client, object_parent, id),
       surface{surface},
       parent{parent_surface->add_child(this)},
+      parent_destroyed{parent_surface->destroyed_flag()},
       synchronized_{true}
 {
     surface->set_role(this);
+    surface->pending_invalidate_surface_data();
 }
 
 mf::WlSubsurface::~WlSubsurface()
 {
     // unique pointer automatically removes `this` from parent child list
 
-    invalidate_buffer_list();
     surface->clear_role();
+    refresh_surface_data_now();
 }
 
-void mf::WlSubsurface::populate_buffer_list(std::vector<shell::StreamSpecification>& buffers,
-                                            geometry::Displacement const& parent_offset) const
+void mf::WlSubsurface::populate_surface_data(std::vector<shell::StreamSpecification>& buffer_streams,
+                                             std::vector<mir::geometry::Rectangle>& input_shape_accumulator,
+                                             geometry::Displacement const& parent_offset) const
 {
-    surface->populate_buffer_list(buffers, parent_offset);
+    surface->populate_surface_data(buffer_streams, input_shape_accumulator, parent_offset);
 }
 
 bool mf::WlSubsurface::synchronized() const
@@ -67,18 +71,28 @@ bool mf::WlSubsurface::synchronized() const
     return synchronized_ || parent->synchronized();
 }
 
+mf::SurfaceId mf::WlSubsurface::surface_id() const
+{
+    return parent->surface_id();
+}
+
 void mf::WlSubsurface::parent_has_committed()
 {
     if (cached_state && synchronized())
     {
-        surface->commit(std::move(cached_state.value()));
+        surface->commit(cached_state.value());
         cached_state = std::experimental::nullopt;
     }
 }
 
+std::experimental::optional<std::pair<geom::Point, mf::WlSurface*>> mf::WlSubsurface::transform_point(geom::Point point)
+{
+    return surface->transform_point(point);
+}
+
 void mf::WlSubsurface::set_position(int32_t x, int32_t y)
 {
-    surface->set_buffer_offset(geom::Displacement{x, y});
+    surface->set_pending_offset(geom::Displacement{x, y});
 }
 
 void mf::WlSubsurface::place_above(struct wl_resource* sibling)
@@ -108,31 +122,30 @@ void mf::WlSubsurface::destroy()
     wl_resource_destroy(resource);
 }
 
-void mf::WlSubsurface::invalidate_buffer_list()
+void mf::WlSubsurface::refresh_surface_data_now()
 {
-    parent->invalidate_buffer_list();
+    if (!*parent_destroyed)
+        parent->refresh_surface_data_now();
 }
 
 void mf::WlSubsurface::commit(WlSurfaceState const& state)
 {
+    if (!cached_state)
+        cached_state = WlSurfaceState();
+
+    cached_state.value().update_from(state);
+
     if (synchronized())
     {
-        if (!cached_state)
-            cached_state = WlSurfaceState();
-
-        cached_state.value().update_from(state);
+        if (cached_state.value().surface_data_needs_refresh() && !*parent_destroyed)
+            parent->pending_invalidate_surface_data();
     }
     else
     {
-        if (cached_state) // unusual
-        {
-            cached_state.value().update_from(state);
-            surface->commit(std::move(cached_state.value()));
-        }
-        else
-        {
-            surface->commit(state);
-        }
+        surface->commit(cached_state.value());
+        if (cached_state.value().surface_data_needs_refresh())
+            refresh_surface_data_now();
+        cached_state = std::experimental::nullopt;
     }
 }
 

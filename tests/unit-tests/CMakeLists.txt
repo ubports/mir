@@ -35,6 +35,7 @@ include_directories(
   ${PROJECT_SOURCE_DIR}/src/platforms/common/client
   ${PROJECT_SOURCE_DIR}/src/platforms/common/server
   ${GLIB_INCLUDE_DIRS}
+  ${GIO_INCLUDE_DIRS}
 )
 
 add_library(example SHARED library_example.cpp)
@@ -91,6 +92,7 @@ add_subdirectory(platforms/)
 add_subdirectory(options/)
 add_subdirectory(client/)
 add_subdirectory(compositor/)
+add_subdirectory(console/)
 add_subdirectory(frontend/)
 add_subdirectory(logging/)
 add_subdirectory(shell/)
@@ -178,6 +180,7 @@ target_link_libraries(
   ${GMOCK_LIBRARIES}
   ${Boost_LIBRARIES}
   ${UMOCKDEV_LIBRARIES}
+  ${LIBINPUT_LIBRARIES}
   ${CMAKE_THREAD_LIBS_INIT} # Link in pthread.
 )
 
@@ -222,3 +225,9 @@ add_dependencies(mir_unit_tests loadable_test_dso)
 mir_add_test(NAME unit-tests-do-not-link-with-GL-or-EGL
       WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin
       COMMAND /bin/sh -c "!(objdump -p *unit_tests* | grep NEEDED | grep GL)")
+
+add_custom_command(TARGET mir_unit_tests POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+  ${CMAKE_CURRENT_SOURCE_DIR}/dbus ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/test-data/dbus
+  COMMENT "Copying dbus-daemon configuration to build dir..."
+)

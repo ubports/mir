@@ -56,12 +56,16 @@ public:
                  WlSurface* parent_surface);
     ~WlSubsurface();
 
-    void populate_buffer_list(std::vector<shell::StreamSpecification>& buffers,
-                              geometry::Displacement const& parent_offset) const;
+    void populate_surface_data(std::vector<shell::StreamSpecification>& buffer_streams,
+                               std::vector<mir::geometry::Rectangle>& input_shape_accumulator,
+                               geometry::Displacement const& parent_offset) const;
 
     bool synchronized() const override;
+    SurfaceId surface_id() const override;
 
     void parent_has_committed();
+
+    std::experimental::optional<std::pair<geometry::Point, WlSurface*>> transform_point(geometry::Point point);
 
 private:
     void set_position(int32_t x, int32_t y) override;
@@ -72,14 +76,15 @@ private:
 
     void destroy() override; // overrides function in both WlSurfaceRole and wayland::Subsurface
 
-    void invalidate_buffer_list() override;
+    void refresh_surface_data_now() override;
     virtual void commit(WlSurfaceState const& state) override;
     virtual void visiblity(bool visible) override;
 
-    WlSurface* surface;
+    WlSurface* const surface;
     // manages parent/child relationship, but does not manage parent's memory
     // see WlSurface::add_child() for details
-    std::unique_ptr<WlSurface, std::function<void(WlSurface*)>> parent;
+    std::unique_ptr<WlSurface, std::function<void(WlSurface*)>> const parent;
+    std::shared_ptr<bool> const parent_destroyed;
     bool synchronized_;
     std::experimental::optional<WlSurfaceState> cached_state;
 };

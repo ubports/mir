@@ -21,6 +21,7 @@
 #include "wayland_utils.h"
 #include "wl_surface_role.h"
 #include "wl_subcompositor.h"
+#include "wl_region.h"
 #include "wlshmbuffer.h"
 #include "deleted_for_resource.h"
 
@@ -34,18 +35,32 @@
 #include "mir/shell/surface_specification.h"
 
 namespace mf = mir::frontend;
+namespace geom = mir::geometry;
 
 void mf::WlSurfaceState::update_from(WlSurfaceState const& source)
 {
     if (source.buffer)
         buffer = source.buffer;
 
-    if (source.buffer_offset)
-        buffer_offset = source.buffer_offset;
+    if (source.offset)
+        offset = source.offset;
+
+    if (source.input_shape)
+        input_shape = source.input_shape;
 
     frame_callbacks.insert(end(frame_callbacks),
                            begin(source.frame_callbacks),
                            end(source.frame_callbacks));
+
+    if (source.surface_data_invalidated)
+        surface_data_invalidated = true;
+}
+
+bool mf::WlSurfaceState::surface_data_needs_refresh() const
+{
+    return offset ||
+           input_shape ||
+           surface_data_invalidated;
 }
 
 mf::WlSurface::WlSurface(
@@ -62,7 +77,6 @@ mf::WlSurface::WlSurface(
         executor{executor},
         null_role{this},
         role{&null_role},
-        pending_frames{std::make_shared<std::vector<WlSurfaceState::Callback>>()},
         destroyed{std::make_shared<bool>(false)}
 {
     // wl_surface is specified to act in mailbox mode
@@ -72,6 +86,15 @@ mf::WlSurface::WlSurface(
 mf::WlSurface::~WlSurface()
 {
     *destroyed = true;
+
+    // so that unregister_destroy_listener calls invoked from destroy listeners don't screw up the iterator
+    auto listeners = move(destroy_listeners);
+    destroy_listeners.clear();
+    for (auto listener: listeners)
+    {
+        listener.second();
+    }
+
     role->destroy();
     session->destroy_buffer_stream(stream_id);
 }
@@ -79,6 +102,30 @@ mf::WlSurface::~WlSurface()
 bool mf::WlSurface::synchronized() const
 {
     return role->synchronized();
+}
+
+std::experimental::optional<std::pair<geom::Point, mf::WlSurface*>> mf::WlSurface::transform_point(geom::Point point)
+{
+    point = point - offset_;
+    // loop backwards so the first subsurface we find that accepts the input is the topmost one
+    for (auto child_it = children.rbegin(); child_it != children.rend(); ++child_it)
+    {
+        auto result = (*child_it)->transform_point(point);
+        if (result)
+            return result;
+    }
+    geom::Rectangle surface_rect = {geom::Point{}, buffer_size_.value_or(geom::Size{})};
+    for (auto& rect : input_shape.value_or(std::vector<geom::Rectangle>{{{}, buffer_size()}}))
+    {
+        if (rect.intersection_with(surface_rect).contains(point))
+            return std::make_pair(point, this);
+    }
+    return std::experimental::nullopt;
+}
+
+mf::SurfaceId mf::WlSurface::surface_id() const
+{
+    return role->surface_id();
 }
 
 void mf::WlSurface::set_role(WlSurfaceRole* role_)
@@ -97,8 +144,10 @@ std::unique_ptr<mf::WlSurface, std::function<void(mf::WlSurface*)>> mf::WlSurfac
 
     return std::unique_ptr<WlSurface, std::function<void(WlSurface*)>>(
         this,
-        [child=child](WlSurface* self)
+        [child=child, destroyed=destroyed](WlSurface* self)
         {
+            if (*destroyed)
+                return;
             // remove the child from the vector
             self->children.erase(std::remove(self->children.begin(),
                                              self->children.end(),
@@ -107,26 +156,67 @@ std::unique_ptr<mf::WlSurface, std::function<void(mf::WlSurface*)>> mf::WlSurfac
         });
 }
 
-void mf::WlSurface::invalidate_buffer_list()
+void mf::WlSurface::refresh_surface_data_now()
 {
-    role->invalidate_buffer_list();
+    role->refresh_surface_data_now();
 }
 
-void mf::WlSurface::populate_buffer_list(std::vector<shell::StreamSpecification>& buffers,
-                                         geometry::Displacement const& parent_offset) const
+void mf::WlSurface::populate_surface_data(std::vector<shell::StreamSpecification>& buffer_streams,
+                                          std::vector<geom::Rectangle>& input_shape_accumulator,
+                                          geometry::Displacement const& parent_offset) const
 {
-    geometry::Displacement offset = parent_offset + buffer_offset_;
-    buffers.push_back({stream_id, offset, {}});
+    geometry::Displacement offset = parent_offset + offset_;
+
+    buffer_streams.push_back({stream_id, offset, {}});
+    geom::Rectangle surface_rect = {geom::Point{} + offset, buffer_size_.value_or(geom::Size{})};
+    if (input_shape)
+    {
+        for (auto rect : input_shape.value())
+        {
+            rect.top_left = rect.top_left + offset;
+            rect = rect.intersection_with(surface_rect); // clip to surface
+            input_shape_accumulator.push_back(rect);
+        }
+    }
+    else
+    {
+        input_shape_accumulator.push_back(surface_rect);
+    }
+
     for (WlSubsurface* subsurface : children)
     {
-        subsurface->populate_buffer_list(buffers, offset);
+        subsurface->populate_surface_data(buffer_streams, input_shape_accumulator, offset);
     }
+}
+
+void mf::WlSurface::add_destroy_listener(void const* key, std::function<void()> listener)
+{
+    destroy_listeners[key] = listener;
+}
+
+void mf::WlSurface::remove_destroy_listener(void const* key)
+{
+    destroy_listeners.erase(key);
 }
 
 mf::WlSurface* mf::WlSurface::from(wl_resource* resource)
 {
     void* raw_surface = wl_resource_get_user_data(resource);
     return static_cast<WlSurface*>(static_cast<wayland::Surface*>(raw_surface));
+}
+
+void mf::WlSurface::send_frame_callbacks()
+{
+    for (auto const& frame : frame_callbacks)
+    {
+        if (!*frame.destroyed)
+        {
+            // TODO: argument should be a timestamp
+            wl_callback_send_done(frame.resource, 0);
+            wl_resource_destroy(frame.resource);
+        }
+    }
+    frame_callbacks.clear();
 }
 
 void mf::WlSurface::destroy()
@@ -175,20 +265,36 @@ void mf::WlSurface::frame(uint32_t callback)
 void mf::WlSurface::set_opaque_region(std::experimental::optional<wl_resource*> const& region)
 {
     (void)region;
+    // This isn't essential, but could enable optimizations
 }
 
 void mf::WlSurface::set_input_region(std::experimental::optional<wl_resource*> const& region)
 {
-    (void)region;
+    if (region)
+    {
+        // since pending.input_shape is an optional optional, this is needed
+        auto shape = WlRegion::from(region.value())->rectangle_vector();
+        pending.input_shape = decltype(pending.input_shape)::value_type{move(shape)};
+    }
+    else
+    {
+        // set the inner optional to nullopt to indicate the input region should be updated, but with a null region
+        pending.input_shape = decltype(pending.input_shape)::value_type{};
+    }
 }
 
 void mf::WlSurface::commit(WlSurfaceState const& state)
 {
-    // We're going to lose the value of state, so copy the frame_callbacks first
-    pending_frames->insert(end(*pending_frames), begin(state.frame_callbacks), end(state.frame_callbacks));
+    // We're going to lose the value of state, so copy the frame_callbacks first. We have to maintain a list of
+    // callbacks in wl_surface because if a client commits multiple times before the first buffer is handled, all the
+    // callbacks should be sent at once.
+    frame_callbacks.insert(end(frame_callbacks), begin(state.frame_callbacks), end(state.frame_callbacks));
 
-    if (state.buffer_offset)
-        buffer_offset_ = state.buffer_offset.value();
+    if (state.offset)
+        offset_ = state.offset.value();
+
+    if (state.input_shape)
+        input_shape = state.input_shape.value();
 
     if (state.buffer)
     {
@@ -197,26 +303,20 @@ void mf::WlSurface::commit(WlSurfaceState const& state)
         if (buffer == nullptr)
         {
             // TODO: unmap surface, and unmap all subsurfaces
+            buffer_size_ = std::experimental::nullopt;
+            send_frame_callbacks();
         }
         else
         {
-            auto send_frame_notifications =
-                [executor = executor, frames = pending_frames, destroyed = destroyed]() mutable
-                    {
-                        executor->spawn(
-                            [frames]()
-                                {
-                                    for (auto const& frame : *frames)
-                                    {
-                                        if (!*frame.destroyed)
-                                        {
-                                            wl_callback_send_done(frame.resource, 0);
-                                            wl_resource_destroy(frame.resource);
-                                        }
-                                    }
-                                    frames->clear();
-                                });
-                    };
+            auto const executor_send_frame_callbacks = [this, executor = executor, destroyed = destroyed]()
+                {
+                    executor->spawn(run_unless(
+                        destroyed,
+                        [this]()
+                        {
+                            send_frame_callbacks();
+                        }));
+                };
 
             std::shared_ptr<graphics::Buffer> mir_buffer;
 
@@ -224,7 +324,7 @@ void mf::WlSurface::commit(WlSurfaceState const& state)
             {
                 mir_buffer = WlShmBuffer::mir_buffer_from_wl_buffer(
                     buffer,
-                    std::move(send_frame_notifications));
+                    std::move(executor_send_frame_callbacks));
             }
             else
             {
@@ -239,7 +339,7 @@ void mf::WlSurface::commit(WlSurfaceState const& state)
 
                 mir_buffer = allocator->buffer_from_resource(
                     buffer,
-                    std::move(send_frame_notifications),
+                    std::move(executor_send_frame_callbacks),
                     std::move(release_buffer));
             }
 
@@ -252,10 +352,18 @@ void mf::WlSurface::commit(WlSurfaceState const& state)
              *
              * TODO: Provide a mg::Buffer::logical_size() to do this properly.
              */
+            if (!input_shape && (!buffer_size_ || mir_buffer->size() != buffer_size_.value()))
+            {
+                state.invalidate_surface_data(); // input shape needs to be recalculated for the new size
+            }
             buffer_size_ = mir_buffer->size();
-            stream->resize(buffer_size_);
+            stream->resize(buffer_size_.value());
             stream->submit_buffer(mir_buffer);
         }
+    }
+    else
+    {
+        send_frame_callbacks();
     }
 
     for (WlSubsurface* child: children)
@@ -266,8 +374,10 @@ void mf::WlSurface::commit(WlSurfaceState const& state)
 
 void mf::WlSurface::commit()
 {
-    role->commit(std::move(pending));
+    // order is important
+    auto const state = std::move(pending);
     pending = WlSurfaceState();
+    role->commit(state);
 }
 
 void mf::WlSurface::set_buffer_transform(int32_t transform)
@@ -287,7 +397,8 @@ mf::NullWlSurfaceRole::NullWlSurfaceRole(WlSurface* surface) :
 {
 }
 
-void mf::NullWlSurfaceRole::invalidate_buffer_list() {}
+mf::SurfaceId mf::NullWlSurfaceRole::surface_id() const { return {}; }
+void mf::NullWlSurfaceRole::refresh_surface_data_now() {}
 void mf::NullWlSurfaceRole::commit(WlSurfaceState const& state) { surface->commit(state); }
 void mf::NullWlSurfaceRole::visiblity(bool /*visible*/) {}
 void mf::NullWlSurfaceRole::destroy() {}

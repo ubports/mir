@@ -68,3 +68,16 @@ auto miral::CanonicalWindowManagerPolicy::confirm_inherited_move(WindowInfo cons
 {
     return {window_info.window().top_left()+movement, window_info.window().size()};
 }
+
+auto miral::CanonicalWindowManagerPolicy::confirm_placement_on_display(
+    WindowInfo const& /*window_info*/,
+    MirWindowState /*new_state*/,
+    Rectangle const& new_placement)
+-> mir::geometry::Rectangle
+{
+    return new_placement;
+}
+
+void miral::CanonicalWindowManagerPolicy::handle_request_drag_and_drop(WindowInfo& /*window_info*/)
+{
+}

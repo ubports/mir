@@ -28,6 +28,7 @@
 
 #include "mir/geometry/displacement.h"
 #include "mir/geometry/size.h"
+#include "mir/geometry/point.h"
 
 #include <vector>
 
@@ -42,6 +43,10 @@ class WaylandAllocator;
 namespace shell
 {
 struct StreamSpecification;
+}
+namespace geometry
+{
+class Rectangle;
 }
 
 namespace frontend
@@ -61,20 +66,33 @@ struct WlSurfaceState
     // if you add variables, don't forget to update this
     void update_from(WlSurfaceState const& source);
 
+    void invalidate_surface_data() const { surface_data_invalidated = true; }
+
+    bool surface_data_needs_refresh() const;
+
     // NOTE: buffer can be both nullopt and nullptr (I know, sounds dumb, but bare with me)
     // if it's nullopt, there is not a new buffer and no value should be copied to current state
     // if it's nullptr, there is a new buffer and it is a null buffer, which should replace the current buffer
     std::experimental::optional<wl_resource*> buffer;
 
-    std::experimental::optional<geometry::Displacement> buffer_offset;
+    std::experimental::optional<geometry::Displacement> offset;
+    std::experimental::optional<std::experimental::optional<std::vector<geometry::Rectangle>>> input_shape;
     std::vector<Callback> frame_callbacks;
+
+private:
+    // only set to true if invalidate_surface_data() is called
+    // surface_data_needs_refresh() returns true if this is true, or if other things are changed which mandate a refresh
+    // is marked mutable so invalidate_surface_data() can be const and be called from a const reference
+    // (this is the only thing we need to modify from the const reference)
+    bool mutable surface_data_invalidated{false};
 };
 
 class NullWlSurfaceRole : public WlSurfaceRole
 {
 public:
     NullWlSurfaceRole(WlSurface* surface);
-    void invalidate_buffer_list() override;
+    SurfaceId surface_id() const override;
+    void refresh_surface_data_now() override;
     void commit(WlSurfaceState const& state) override;
     void visiblity(bool /*visible*/) override;
     void destroy() override;
@@ -96,23 +114,29 @@ public:
     ~WlSurface();
 
     std::shared_ptr<bool> destroyed_flag() const { return destroyed; }
-    geometry::Displacement buffer_offset() const { return buffer_offset_; }
-    geometry::Size buffer_size() const { return buffer_size_; }
+    geometry::Displacement offset() const { return offset_; }
+    geometry::Size buffer_size() const { return buffer_size_.value_or(geometry::Size{}); }
     bool synchronized() const;
+    std::experimental::optional<std::pair<geometry::Point, WlSurface*>> transform_point(geometry::Point point);
+    wl_resource* raw_resource() const { return resource; }
+    mir::frontend::SurfaceId surface_id() const;
 
     void set_role(WlSurfaceRole* role_);
     void clear_role();
-    void set_buffer_offset(geometry::Displacement const& offset) { pending.buffer_offset = offset; }
+    void set_pending_offset(geometry::Displacement const& offset) { pending.offset = offset; }
     std::unique_ptr<WlSurface, std::function<void(WlSurface*)>> add_child(WlSubsurface* child);
-    void invalidate_buffer_list();
-    void populate_buffer_list(std::vector<shell::StreamSpecification>& buffers,
-                              geometry::Displacement const& parent_offset) const;
+    void refresh_surface_data_now();
+    void pending_invalidate_surface_data() { pending.invalidate_surface_data(); }
+    void populate_surface_data(std::vector<shell::StreamSpecification>& buffer_streams,
+                               std::vector<mir::geometry::Rectangle>& input_shape_accumulator,
+                               geometry::Displacement const& parent_offset) const;
     void commit(WlSurfaceState const& state);
+    void add_destroy_listener(void const* key, std::function<void()> listener);
+    void remove_destroy_listener(void const* key);
 
     std::shared_ptr<mir::frontend::Session> const session;
     mir::frontend::BufferStreamId const stream_id;
     std::shared_ptr<mir::frontend::BufferStream> const stream;
-    mir::frontend::SurfaceId surface_id;       // ID of any associated surface
 
     static WlSurface* from(wl_resource* resource);
 
@@ -122,13 +146,17 @@ private:
 
     NullWlSurfaceRole null_role;
     WlSurfaceRole* role;
-    std::vector<WlSubsurface*> children;
+    std::vector<WlSubsurface*> children; // ordering is from bottom to top
 
     WlSurfaceState pending;
-    geometry::Displacement buffer_offset_;
-    geometry::Size buffer_size_;
-    std::shared_ptr<std::vector<WlSurfaceState::Callback>> const pending_frames;
+    geometry::Displacement offset_;
+    std::experimental::optional<geometry::Size> buffer_size_;
+    std::vector<WlSurfaceState::Callback> frame_callbacks;
+    std::experimental::optional<std::vector<mir::geometry::Rectangle>> input_shape;
+    std::map<void const*, std::function<void()>> destroy_listeners;
     std::shared_ptr<bool> const destroyed;
+
+    void send_frame_callbacks();
 
     void destroy() override;
     void attach(std::experimental::optional<wl_resource*> const& buffer, int32_t x, int32_t y) override;
