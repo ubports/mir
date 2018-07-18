@@ -97,6 +97,14 @@ int mga::ServerRenderWindow::driver_requests_info(int key) const
             return GRALLOC_USAGE_HW_RENDER | GRALLOC_USAGE_HW_COMPOSER | GRALLOC_USAGE_HW_FB;
         case NATIVE_WINDOW_DEFAULT_DATASPACE:
             return HAL_DATASPACE_UNKNOWN;
+        case NATIVE_WINDOW_BUFFER_AGE:
+            // New server side buffer attribute requested by 7.1 qcom drivers, mir does not
+            // track the buffer age on the server at the moment, so this is only a band aid
+            return 0; // 0 means new or unpainted
+        case NATIVE_WINDOW_LAST_QUEUE_DURATION:
+            return 20;
+        case NATIVE_WINDOW_LAST_DEQUEUE_DURATION:
+            return 20;
         default:
             {
             std::stringstream sstream;
