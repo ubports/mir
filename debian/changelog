@@ -1,3 +1,9 @@
+mir (0.32.1b) bionic; urgency=medium
+
+  * Master build
+
+ -- Marius Gripsgard <marius@ubports.com>  Tue, 24 Jul 2018 02:32:52 +0200
+
 mir (0.32.1) UNRELEASED; urgency=medium
 
   * New upstream release 0.32.1(https://github.com/MirServer/mir/projects/5)
