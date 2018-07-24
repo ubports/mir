@@ -21,13 +21,12 @@
 #include "data_device.h"
 #include "wayland_utils.h"
 #include "wl_surface_role.h"
+#include "window_wl_surface_role.h"
 #include "wl_subcompositor.h"
 #include "wl_surface.h"
 #include "wl_seat.h"
-#include "xdg_shell_v6.h"
 #include "wl_region.h"
 
-#include "basic_surface_event_sink.h"
 #include "null_event_sink.h"
 #include "output_manager.h"
 #include "wayland_executor.h"
@@ -289,7 +288,7 @@ void WlCompositor::create_region(wl_client* client, wl_resource* resource, uint3
     new WlRegion{client, resource, id};
 }
 
-class WlShellSurface  : public wayland::ShellSurface, public WlAbstractMirWindow
+class WlShellSurface  : public wayland::ShellSurface, public WindowWlSurfaceRole
 {
 public:
     WlShellSurface(
@@ -301,14 +300,11 @@ public:
         WlSeat& seat,
         OutputManager* output_manager)
         : ShellSurface(client, parent, id),
-          WlAbstractMirWindow{&seat, client, surface, shell, output_manager}
+          WindowWlSurfaceRole{&seat, client, surface, shell, output_manager}
     {
     }
 
-    ~WlShellSurface() override
-    {
-        surface->clear_role();
-    }
+    ~WlShellSurface() = default;
 
 protected:
     void destroy() override
@@ -318,7 +314,7 @@ protected:
 
     void set_toplevel() override
     {
-        surface->set_role(this);
+        become_surface_role();
     }
 
     void set_transient(
@@ -327,34 +323,22 @@ protected:
         int32_t y,
         uint32_t flags) override
     {
-        auto const session = get_session(client);
         auto& parent_surface = *WlSurface::from(parent);
 
-        if (surface_id().as_value())
-        {
-            auto& mods = spec();
-            mods.parent_id = parent_surface.surface_id();
-            mods.aux_rect = geom::Rectangle{{x, y}, {}};
-            mods.surface_placement_gravity = mir_placement_gravity_northwest;
-            mods.aux_rect_placement_gravity = mir_placement_gravity_southeast;
-            mods.placement_hints = mir_placement_hints_slide_x;
-            mods.aux_rect_placement_offset_x = 0;
-            mods.aux_rect_placement_offset_y = 0;
-        }
-        else
-        {
-            if (flags & WL_SHELL_SURFACE_TRANSIENT_INACTIVE)
-                params->type = mir_window_type_gloss;
-            params->parent_id = parent_surface.surface_id();
-            params->aux_rect = geom::Rectangle{{x, y}, {}};
-            params->surface_placement_gravity = mir_placement_gravity_northwest;
-            params->aux_rect_placement_gravity = mir_placement_gravity_southeast;
-            params->placement_hints = mir_placement_hints_slide_x;
-            params->aux_rect_placement_offset_x = 0;
-            params->aux_rect_placement_offset_y = 0;
+        mir::shell::SurfaceSpecification mods;
 
-            surface->set_role(this);
-        }
+        if (flags & WL_SHELL_SURFACE_TRANSIENT_INACTIVE)
+            mods.type = mir_window_type_gloss;
+        mods.parent_id = parent_surface.surface_id();
+        mods.aux_rect = geom::Rectangle{{x, y}, {}};
+        mods.surface_placement_gravity = mir_placement_gravity_northwest;
+        mods.aux_rect_placement_gravity = mir_placement_gravity_southeast;
+        mods.placement_hints = mir_placement_hints_slide_x;
+        mods.aux_rect_placement_offset_x = 0;
+        mods.aux_rect_placement_offset_y = 0;
+
+        apply_spec(mods);
+        become_surface_role();
     }
 
     void handle_resize(const geometry::Size & new_size) override
@@ -368,7 +352,7 @@ protected:
         uint32_t /*framerate*/,
         std::experimental::optional<struct wl_resource*> const& output) override
     {
-        WlAbstractMirWindow::set_fullscreen(output);
+        WindowWlSurfaceRole::set_fullscreen(output);
     }
 
     void set_popup(
@@ -382,50 +366,31 @@ protected:
         auto const session = get_session(client);
         auto& parent_surface = *WlSurface::from(parent);
 
-        if (surface_id().as_value())
-        {
-            auto& mods = spec();
-            mods.parent_id = parent_surface.surface_id();
-            mods.aux_rect = geom::Rectangle{{x, y}, {}};
-            mods.surface_placement_gravity = mir_placement_gravity_northwest;
-            mods.aux_rect_placement_gravity = mir_placement_gravity_southeast;
-            mods.placement_hints = mir_placement_hints_slide_x;
-            mods.aux_rect_placement_offset_x = 0;
-            mods.aux_rect_placement_offset_y = 0;
-        }
-        else
-        {
-            if (flags & WL_SHELL_SURFACE_TRANSIENT_INACTIVE)
-                params->type = mir_window_type_gloss;
+        mir::shell::SurfaceSpecification mods;
 
-            params->parent_id = parent_surface.surface_id();
-            params->aux_rect = geom::Rectangle{{x, y}, {}};
-            params->surface_placement_gravity = mir_placement_gravity_northwest;
-            params->aux_rect_placement_gravity = mir_placement_gravity_southeast;
-            params->placement_hints = mir_placement_hints_slide_x;
-            params->aux_rect_placement_offset_x = 0;
-            params->aux_rect_placement_offset_y = 0;
+        if (flags & WL_SHELL_SURFACE_TRANSIENT_INACTIVE)
+            mods.type = mir_window_type_gloss;
+        mods.parent_id = parent_surface.surface_id();
+        mods.aux_rect = geom::Rectangle{{x, y}, {}};
+        mods.surface_placement_gravity = mir_placement_gravity_northwest;
+        mods.aux_rect_placement_gravity = mir_placement_gravity_southeast;
+        mods.placement_hints = mir_placement_hints_slide_x;
+        mods.aux_rect_placement_offset_x = 0;
+        mods.aux_rect_placement_offset_y = 0;
 
-            surface->set_role(this);
-        }
+        apply_spec(mods);
+        become_surface_role();
     }
 
     void set_maximized(std::experimental::optional<struct wl_resource*> const& output) override
     {
         (void)output;
-        WlAbstractMirWindow::set_maximized();
+        WindowWlSurfaceRole::set_state_now(mir_window_state_maximized);
     }
 
     void set_title(std::string const& title) override
     {
-        if (surface_id().as_value())
-        {
-            spec().name = title;
-        }
-        else
-        {
-            params->name = title;
-        }
+        WindowWlSurfaceRole::set_title(title);
     }
 
     void pong(uint32_t /*serial*/) override
@@ -434,75 +399,58 @@ protected:
 
     void move(struct wl_resource* /*seat*/, uint32_t /*serial*/) override
     {
-        if (surface_id().as_value())
-        {
-            if (auto session = get_session(client))
-            {
-                shell->request_operation(session, surface_id(), sink->latest_timestamp_ns(), Shell::UserRequest::move);
-            }
-        }
+        WindowWlSurfaceRole::initiate_interactive_move();
     }
 
     void resize(struct wl_resource* /*seat*/, uint32_t /*serial*/, uint32_t edges) override
     {
-        if (surface_id().as_value())
+        MirResizeEdge edge = mir_resize_edge_none;
+
+        switch (edges)
         {
-            if (auto session = get_session(client))
-            {
-                MirResizeEdge edge = mir_resize_edge_none;
+        case WL_SHELL_SURFACE_RESIZE_TOP:
+            edge = mir_resize_edge_north;
+            break;
 
-                switch (edges)
-                {
-                case WL_SHELL_SURFACE_RESIZE_TOP:
-                    edge = mir_resize_edge_north;
-                    break;
+        case WL_SHELL_SURFACE_RESIZE_BOTTOM:
+            edge = mir_resize_edge_south;
+            break;
 
-                case WL_SHELL_SURFACE_RESIZE_BOTTOM:
-                    edge = mir_resize_edge_south;
-                    break;
+        case WL_SHELL_SURFACE_RESIZE_LEFT:
+            edge = mir_resize_edge_west;
+            break;
 
-                case WL_SHELL_SURFACE_RESIZE_LEFT:
-                    edge = mir_resize_edge_west;
-                    break;
+        case WL_SHELL_SURFACE_RESIZE_TOP_LEFT:
+            edge = mir_resize_edge_northwest;
+            break;
 
-                case WL_SHELL_SURFACE_RESIZE_TOP_LEFT:
-                    edge = mir_resize_edge_northwest;
-                    break;
+        case WL_SHELL_SURFACE_RESIZE_BOTTOM_LEFT:
+            edge = mir_resize_edge_southwest;
+            break;
 
-                case WL_SHELL_SURFACE_RESIZE_BOTTOM_LEFT:
-                    edge = mir_resize_edge_southwest;
-                    break;
+        case WL_SHELL_SURFACE_RESIZE_RIGHT:
+            edge = mir_resize_edge_east;
+            break;
 
-                case WL_SHELL_SURFACE_RESIZE_RIGHT:
-                    edge = mir_resize_edge_east;
-                    break;
+        case WL_SHELL_SURFACE_RESIZE_TOP_RIGHT:
+            edge = mir_resize_edge_northeast;
+            break;
 
-                case WL_SHELL_SURFACE_RESIZE_TOP_RIGHT:
-                    edge = mir_resize_edge_northeast;
-                    break;
+        case WL_SHELL_SURFACE_RESIZE_BOTTOM_RIGHT:
+            edge = mir_resize_edge_southeast;
+            break;
 
-                case WL_SHELL_SURFACE_RESIZE_BOTTOM_RIGHT:
-                    edge = mir_resize_edge_southeast;
-                    break;
-
-                default:;
-                }
-
-                shell->request_operation(
-                    session,
-                    surface_id(),
-                    sink->latest_timestamp_ns(),
-                    Shell::UserRequest::resize,
-                    edge);
-            }
+        default:;
         }
+
+        WindowWlSurfaceRole::initiate_interactive_resize(edge);
     }
 
     void set_class(std::string const& /*class_*/) override
     {
     }
 
-    using WlAbstractMirWindow::client;
+    using WindowWlSurfaceRole::client;
 };
 
 class WlShell : public wayland::Shell
@@ -611,6 +559,32 @@ std::shared_ptr<mg::WaylandAllocator> allocator_for_display(
 }
 }
 
+void mf::WaylandExtensions::init(wl_display* display, std::shared_ptr<Shell> const& shell, WlSeat* seat, OutputManager* const output_manager)
+{
+
+    add_extension("wl_shell", std::make_shared<mf::WlShell>(display, shell, *seat, output_manager));
+
+    custom_extensions(display, shell, seat, output_manager);
+}
+
+void mf::WaylandExtensions::add_extension(std::string const name, std::shared_ptr<void> implementation)
+{
+    extension_protocols[std::move(name)] = std::move(implementation);
+}
+
+void mf::WaylandExtensions::custom_extensions(wl_display*, std::shared_ptr<Shell> const&, WlSeat*, OutputManager* const)
+{
+}
+
+auto mir::frontend::WaylandExtensions::get_extension(std::string const& name) const -> std::shared_ptr<void>
+{
+    auto const result = extension_protocols.find(name);
+    if (result != end(extension_protocols))
+        return result->second;
+
+    return {};
+}
+
 mf::WaylandConnector::WaylandConnector(
     optional_value<std::string> const& display_name,
     std::shared_ptr<mf::Shell> const& shell,
@@ -619,10 +593,12 @@ mf::WaylandConnector::WaylandConnector(
     std::shared_ptr<mi::Seat> const& seat,
     std::shared_ptr<mg::GraphicBufferAllocator> const& allocator,
     std::shared_ptr<mf::SessionAuthorizer> const& session_authorizer,
-    bool arw_socket)
+    bool arw_socket,
+    std::unique_ptr<WaylandExtensions> extensions_)
     : display{wl_display_create(), &cleanup_display},
       pause_signal{eventfd(0, EFD_CLOEXEC | EFD_SEMAPHORE)},
-      allocator{allocator_for_display(allocator, display.get())}
+      allocator{allocator_for_display(allocator, display.get())},
+      extensions{std::move(extensions_)}
 {
     if (pause_signal == mir::Fd::invalid)
     {
@@ -657,10 +633,10 @@ mf::WaylandConnector::WaylandConnector(
     output_manager = std::make_unique<mf::OutputManager>(
         display.get(),
         display_config);
-    shell_global = std::make_unique<mf::WlShell>(display.get(), shell, *seat_global, output_manager.get());
+
     data_device_manager_global = mf::create_data_device_manager(display.get());
-    if (!getenv("MIR_DISABLE_XDG_SHELL_V6_UNSTABLE"))
-        xdg_shell_global = std::make_unique<XdgShellV6>(display.get(), shell, *seat_global, output_manager.get());
+
+    extensions->init(display.get(), shell, seat_global.get(), output_manager.get());
 
     wl_display_init_shm(display.get());
 
@@ -816,4 +792,14 @@ void mf::WaylandConnector::run_on_wayland_display(std::function<void(wl_display*
 auto mf::WaylandConnector::socket_name() const -> optional_value<std::string>
 {
     return wayland_display;
+}
+
+auto mf::WaylandConnector::get_extension(std::string const& name) const -> std::shared_ptr<void>
+{
+    return extensions->get_extension(name);
+}
+
+auto mf::WaylandConnector::get_wl_display() const -> wl_display*
+{
+    return display.get();
 }
