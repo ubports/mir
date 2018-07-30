@@ -44,6 +44,10 @@ mga::DisplayName display_name(int raw_name)
             return mga::DisplayName::primary;
         case HWC_DISPLAY_EXTERNAL:
             return mga::DisplayName::external;
+#ifdef ANDROID_CAF
+        case HWC_DISPLAY_TERTIARY:
+            return mga::DisplayName::tertiary;
+#endif
         case HWC_DISPLAY_VIRTUAL:
             return mga::DisplayName::virt;
     }

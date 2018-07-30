@@ -84,14 +84,18 @@ bool mga::HwcDevice::buffer_is_onscreen(mg::Buffer const& buffer) const
 
 void mga::HwcDevice::commit(std::list<DisplayContents> const& contents)
 {
+#ifdef ANDROID_CAF
+    std::array<hwc_display_contents_1*, HWC_NUM_DISPLAY_TYPES> lists{{ nullptr, nullptr, nullptr, nullptr }};
+#else
     std::array<hwc_display_contents_1*, HWC_NUM_DISPLAY_TYPES> lists{{ nullptr, nullptr, nullptr }};
+#endif
     std::vector<std::shared_ptr<mg::Buffer>> next_onscreen_overlay_buffers;
 
     for (auto& content : contents)
     {
         if (content.name == mga::DisplayName::primary)
             lists[HWC_DISPLAY_PRIMARY] = content.list.native_list();
-        else if (content.name == mga::DisplayName::external) 
+        else if (content.name == mga::DisplayName::external)
             lists[HWC_DISPLAY_EXTERNAL] = content.list.native_list();
 
         content.list.setup_fb(content.context.last_rendered_buffer());
