@@ -65,7 +65,8 @@ char const* output_type_to_string(mg::DisplayConfigurationOutputType type)
         "hdmia",
         "hdmib",
         "tv",
-        "edp"
+        "edp",
+        "virtual"
     };
 
     auto index = static_cast<ssize_t>(type);
