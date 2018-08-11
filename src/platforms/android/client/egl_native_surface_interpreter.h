@@ -54,6 +54,7 @@ private:
     std::shared_ptr<graphics::android::SyncFileOps> const sync_ops;
     unsigned int const hardware_bits;
     unsigned int const software_bits;
+    int last_buffer_age;
 };
 
 }
