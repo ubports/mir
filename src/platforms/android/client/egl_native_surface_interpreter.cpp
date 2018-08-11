@@ -20,6 +20,8 @@
 #include "sync_fence.h"
 #include "mir/frontend/client_constants.h"
 #include "mir/client_buffer.h"
+#define MIR_LOG_COMPONENT "android/client"
+#include "mir/log.h"
 #include <system/window.h>
 #include <system/graphics.h>
 #include <hardware/gralloc.h>
@@ -107,6 +109,7 @@ int mcla::EGLNativeSurfaceInterpreter::driver_requests_info(int key) const
         case NATIVE_WINDOW_BUFFER_AGE:
             return last_buffer_age;
         default:
+            mir::log_error("driver requested unsupported query %d", key);
             throw std::runtime_error("driver requested unsupported query");
     }
 }
