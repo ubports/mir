@@ -20,6 +20,8 @@
 #include "sync_fence.h"
 #include "mir/frontend/client_constants.h"
 #include "mir/client_buffer.h"
+#define MIR_LOG_COMPONENT "android/client"
+#include "mir/log.h"
 #include <system/window.h>
 #include <system/graphics.h>
 #include <hardware/gralloc.h>
@@ -35,13 +37,16 @@ mcla::EGLNativeSurfaceInterpreter::EGLNativeSurfaceInterpreter(EGLNativeSurface&
     hardware_bits( GRALLOC_USAGE_HW_TEXTURE | GRALLOC_USAGE_HW_RENDER ),
     software_bits(
         GRALLOC_USAGE_SW_WRITE_OFTEN | GRALLOC_USAGE_SW_READ_OFTEN |
-        GRALLOC_USAGE_HW_COMPOSER | GRALLOC_USAGE_HW_TEXTURE )
+        GRALLOC_USAGE_HW_COMPOSER | GRALLOC_USAGE_HW_TEXTURE ),
+    last_buffer_age(0)
+
 {
 }
 
 mir::graphics::NativeBuffer* mcla::EGLNativeSurfaceInterpreter::driver_requests_buffer()
 {
     auto buffer = surface.get_current_buffer();
+    last_buffer_age = buffer->age();
     auto buffer_to_driver = buffer->native_buffer_handle();
 
     ANativeWindowBuffer* anwb = buffer_to_driver->anwb();
@@ -101,13 +106,16 @@ int mcla::EGLNativeSurfaceInterpreter::driver_requests_info(int key) const
                 return software_bits;
         case NATIVE_WINDOW_DEFAULT_DATASPACE:
             return HAL_DATASPACE_UNKNOWN;
+        case NATIVE_WINDOW_BUFFER_AGE:
+            return last_buffer_age;
         default:
+            mir::log_error("driver requested unsupported query %d", key);
             throw std::runtime_error("driver requested unsupported query");
     }
 }
 
 void mcla::EGLNativeSurfaceInterpreter::sync_to_display(bool should_sync)
-{ 
+{
     surface.request_and_wait_for_configure(mir_surface_attrib_swapinterval, should_sync);
 }
 
