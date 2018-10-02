@@ -33,6 +33,8 @@
 #include <miral/display_configuration_option.h>
 #include <miral/runner.h>
 #include <miral/window_management_options.h>
+#include <miral/x11_support.h>
+#include <miral/wayland_extensions.h>
 
 #include "mir/abnormal_exit.h"
 #include "mir/server.h"
@@ -146,6 +148,8 @@ try
         me::add_log_host_lifecycle_option_to,
         me::add_glog_options_to,
         miral::StartupInternalClient{"Intro", spinner},
+        miral::X11Support{},
+        miral::WaylandExtensions{"wl_shell:xdg_wm_base:zxdg_shell_v6:zwlr_layer_shell_v1"},
         launcher,
         window_managers,
         me::add_custom_compositor_option_to,

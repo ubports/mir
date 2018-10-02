@@ -2,7 +2,7 @@
  * Copyright © 2016-2018 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify
- * under the terms of the GNU General Public License version 2 or 3 as as
+ * under the terms of the GNU General Public License version 2 or 3 as
  * published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -20,6 +20,7 @@
 
 #include <miral/runner.h>
 #include <miral/application_authorizer.h>
+#include <miral/display_configuration.h>
 #include <miral/command_line_option.h>
 #include <miral/keymap.h>
 #include <miral/set_window_management_policy.h>
@@ -91,10 +92,14 @@ int main(int argc, char const* argv[])
         "Only allow applications to connect during startup",
         KioskAuthorizer::startup_only};
 
-    return MirRunner{argc, argv}.run_with(
+    MirRunner runner{argc, argv};
+
+    DisplayConfiguration display_config{runner};
+
+    return runner.run_with(
         {
-            CommandLineOption{[&](std::string const& ) { },
-                              "desktop_file_hint", "Ignored for Unity8 compatability", "miral-shell.desktop"},
+            display_config,
+            display_config.layout_option(),
             set_window_management_policy<KioskWindowManagerPolicy>(splash),
             SetApplicationAuthorizer<KioskAuthorizer>{splash},
             Keymap{},

@@ -11,11 +11,14 @@ export DPKG_GENSYMBOLS_CHECK_LEVEL = 4
 # Enable verbose debugging output from the testsuite
 export MIR_SERVER_LOGGING = on
 override_dh_auto_test:
-ifeq ($(DEB_HOST_ARCH_ENDIAN),little)
-#	GTEST_OUTPUT=xml:./ dh_auto_build -- ARGS="-V" ptest
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+  ifeq ($(DEB_HOST_ARCH_ENDIAN),little)
+	#GTEST_OUTPUT=xml:./ dh_auto_build -- ARGS="-V" ptest
+  else
 	echo "Testsuite disabled on $(DEB_HOST_ARCH) due to lack of big-endian support."
+  endif
 else
-	echo "Testsuite disabled on $(DEB_HOST_ARCH) due to lack of big-endian support."
+	echo "Testsuite disabled due to DEB_BUILD_OPTIONS=\"$(DEB_BUILD_OPTIONS)\""
 endif
 
 COMMON_CONFIGURE_OPTIONS = \
@@ -30,6 +33,11 @@ endif
 # Disable LTO on s390x, due to failing to build
 ifeq ($(DEB_HOST_ARCH),s390x)
 	COMMON_CONFIGURE_OPTIONS += -DMIR_LINK_TIME_OPTIMIZATION=OFF
+endif
+
+# Don't use "gold" linker 16.04 , due to failing to build on ppc64le
+ifneq ($(filter xenial,$(DEB_DISTRIBUTION)),)
+	COMMON_CONFIGURE_OPTIONS += -DMIR_USE_LD=ld
 endif
 
 $(info COMMON_CONFIGURE_OPTIONS: ${COMMON_CONFIGURE_OPTIONS})

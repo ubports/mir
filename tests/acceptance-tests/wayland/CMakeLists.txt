@@ -9,6 +9,7 @@ ExternalProject_Add(
     -DCMAKE_C_COMPILER='${CMAKE_C_COMPILER}'
     -DCMAKE_CXX_FLAGS='${CMAKE_CXX_FLAGS}'
     -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+    -DCMAKE_SHARED_LINKER_FLAGS='${CMAKE_SHARED_LINKER_FLAGS}'
     -DCMAKE_LIBRARY_OUTPUT_DIRECTORY=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
   BUILD_BYPRODUCTS ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libwlcs.so
   INSTALL_COMMAND true
@@ -20,21 +21,20 @@ add_dependencies(libwlcs wlcs)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/wlcs/include)
 
-mir_add_wrapped_executable(mir_wlcs_tests NOINSTALL
+mir_add_wrapped_executable(miral_wlcs_tests NOINSTALL
 
-  wlcs/example/mir_integration.cpp
+  miral_integration.cpp
 )
 
 target_link_libraries(
-  mir_wlcs_tests
+  miral_wlcs_tests
 
-  libwlcs
-  mirserver
-  mir-test-assist
+  miral-test-framework
   mir-test-doubles-platform-static
+  libwlcs
   ${WAYLAND_CLIENT_LDFLAGS} ${WAYLAND_CLIENT_LIBRARIES}
 )
 
 if (MIR_RUN_ACCEPTANCE_TESTS)
-  mir_discover_tests_with_fd_leak_detection(mir_wlcs_tests)
+  mir_discover_tests_with_fd_leak_detection(miral_wlcs_tests)
 endif (MIR_RUN_ACCEPTANCE_TESTS)

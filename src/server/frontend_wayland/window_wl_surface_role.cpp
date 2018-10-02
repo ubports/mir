@@ -56,6 +56,7 @@ mf::WindowWlSurfaceRole::WindowWlSurfaceRole(WlSeat* seat, wl_client* client, Wl
           params{std::make_unique<scene::SurfaceCreationParameters>(
                  scene::SurfaceCreationParameters().of_type(mir_window_type_freestyle))}
 {
+    surface->set_role(this);
 }
 
 mf::WindowWlSurfaceRole::~WindowWlSurfaceRole()
@@ -86,11 +87,6 @@ void mf::WindowWlSurfaceRole::refresh_surface_data_now()
     shell::SurfaceSpecification surface_data_spec;
     populate_spec_with_surface_data(surface_data_spec);
     shell->modify_surface(get_session(client), surface_id_, surface_data_spec);
-}
-
-void mf::WindowWlSurfaceRole::become_surface_role()
-{
-    surface->set_role(this);
 }
 
 void mf::WindowWlSurfaceRole::apply_spec(mir::shell::SurfaceSpecification const& new_spec)
@@ -300,10 +296,11 @@ void mf::WindowWlSurfaceRole::commit(WlSurfaceState const& state)
             shell->modify_surface(session, surface_id_, *pending_changes);
 
         pending_changes.reset();
-        return;
     }
-
-    create_mir_window();
+    else
+    {
+        create_mir_window();
+    }
 }
 
 void mf::WindowWlSurfaceRole::visiblity(bool visible)

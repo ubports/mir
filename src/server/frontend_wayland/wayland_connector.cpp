@@ -186,9 +186,7 @@ void create_client_session(wl_listener* listener, void* data)
     gid_t client_gid;
     wl_client_get_credentials(client, &client_pid, &client_uid, &client_gid);
 
-    auto session_cred = new mf::SessionCredentials{client_pid,
-                                                   client_uid, client_gid};
-    if (!construction_context->session_authorizer->connection_is_allowed(*session_cred))
+    if (!construction_context->session_authorizer->connection_is_allowed({client_pid, client_uid, client_gid}))
     {
         wl_client_destroy(client);
         return;
@@ -314,7 +312,6 @@ protected:
 
     void set_toplevel() override
     {
-        become_surface_role();
     }
 
     void set_transient(
@@ -338,10 +335,10 @@ protected:
         mods.aux_rect_placement_offset_y = 0;
 
         apply_spec(mods);
-        become_surface_role();
     }
 
-    void handle_resize(const geometry::Size & new_size) override
+    void handle_resize(std::experimental::optional<geometry::Point> const& /*new_top_left*/,
+                       geometry::Size const& new_size) override
     {
         wl_shell_surface_send_configure(resource, WL_SHELL_SURFACE_RESIZE_NONE, new_size.width.as_int(),
                                         new_size.height.as_int());
@@ -363,7 +360,6 @@ protected:
         int32_t y,
         uint32_t flags) override
     {
-        auto const session = get_session(client);
         auto& parent_surface = *WlSurface::from(parent);
 
         mir::shell::SurfaceSpecification mods;
@@ -379,7 +375,6 @@ protected:
         mods.aux_rect_placement_offset_y = 0;
 
         apply_spec(mods);
-        become_surface_role();
     }
 
     void set_maximized(std::experimental::optional<struct wl_resource*> const& output) override
@@ -449,8 +444,6 @@ protected:
     void set_class(std::string const& /*class_*/) override
     {
     }
-
-    using WindowWlSurfaceRole::client;
 };
 
 class WlShell : public wayland::Shell
@@ -559,11 +552,14 @@ std::shared_ptr<mg::WaylandAllocator> allocator_for_display(
 }
 }
 
+auto mf::create_wl_shell(wl_display* display, std::shared_ptr<Shell> const& shell, WlSeat* seat, OutputManager* const output_manager)
+-> std::shared_ptr<void>
+{
+    return std::make_shared<mf::WlShell>(display, shell, *seat, output_manager);
+}
+
 void mf::WaylandExtensions::init(wl_display* display, std::shared_ptr<Shell> const& shell, WlSeat* seat, OutputManager* const output_manager)
 {
-
-    add_extension("wl_shell", std::make_shared<mf::WlShell>(display, shell, *seat, output_manager));
-
     custom_extensions(display, shell, seat, output_manager);
 }
 
@@ -588,7 +584,7 @@ auto mir::frontend::WaylandExtensions::get_extension(std::string const& name) co
 mf::WaylandConnector::WaylandConnector(
     optional_value<std::string> const& display_name,
     std::shared_ptr<mf::Shell> const& shell,
-    DisplayChanger& display_config,
+    std::shared_ptr<MirDisplay> const& display_config,
     std::shared_ptr<mi::InputDeviceHub> const& input_hub,
     std::shared_ptr<mi::Seat> const& seat,
     std::shared_ptr<mg::GraphicBufferAllocator> const& allocator,

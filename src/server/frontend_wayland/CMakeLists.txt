@@ -1,4 +1,4 @@
-add_subdirectory(protocol/)
+add_subdirectory(generator/)
 add_subdirectory(generated/)
 
 include_directories(../frontend_xwayland)
@@ -6,6 +6,7 @@ include_directories(../frontend_xwayland)
 set(
   WAYLAND_SOURCES
 
+  mir_display.cpp               mir_display.h
   wayland_default_configuration.cpp
   wayland_connector.cpp         wayland_connector.h
   wlshmbuffer.cpp               wlshmbuffer.h
@@ -23,6 +24,8 @@ set(
   wl_pointer.cpp                wl_pointer.h
   wl_touch.cpp                  wl_touch.h
   xdg_shell_v6.cpp              xdg_shell_v6.h
+  xdg_shell_stable.cpp          xdg_shell_stable.h
+  layer_shell_v1.cpp            layer_shell_v1.h
   deleted_for_resource.cpp      deleted_for_resource.h
   wl_region.cpp                 wl_region.h)
 

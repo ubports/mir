@@ -9,7 +9,11 @@ set(MIRAL_ABI 3)
 set(symbol_map ${CMAKE_CURRENT_SOURCE_DIR}/symbols.map)
 set(miral_include ${PROJECT_SOURCE_DIR}/include/miral)
 
+pkg_check_modules(YAML REQUIRED yaml-cpp)
+
 add_library(mirclientcpp INTERFACE)
+
+add_definitions(-DMIR_LOG_COMPONENT_FALLBACK="miral")
 
 add_library(miral-internal STATIC
     active_outputs.cpp                  active_outputs.h
@@ -18,15 +22,15 @@ add_library(miral-internal STATIC
     display_configuration_listeners.cpp display_configuration_listeners.h
     launch_app.cpp                      launch_app.h
     mru_window_list.cpp                 mru_window_list.h
+    static_display_config.cpp           static_display_config.h
     window_management_trace.cpp         window_management_trace.h
     xcursor_loader.cpp                  xcursor_loader.h
     xcursor.c                           xcursor.h
                                         join_client_threads.h
-                                        window_info_defaults.h
+    window_info_defaults.cpp            window_info_defaults.h
 )
 
-# For no obvious reason this has to be explicit on Cosmic and not implied
-# by the linker's symbol version script
+# Already implied by the linker's symbol version script, but can avoid accidents
 set_target_properties(miral-internal
     PROPERTIES COMPILE_FLAGS "${CMAKE_CXXFLAGS}  -fvisibility=hidden")
 
@@ -41,12 +45,14 @@ add_library(miral SHARED
     command_line_option.cpp             ${miral_include}/miral/command_line_option.h
     cursor_theme.cpp                    ${miral_include}/miral/cursor_theme.h
     debug_extension.cpp                 ${miral_include}/miral/debug_extension.h
+    display_configuration.cpp           ${miral_include}/miral/display_configuration.h
     external_client.cpp                 ${miral_include}/miral/external_client.h
     keymap.cpp                          ${miral_include}/miral/keymap.h
     runner.cpp                          ${miral_include}/miral/runner.h
     display_configuration_option.cpp    ${miral_include}/miral/display_configuration_option.h
     output.cpp                          ${miral_include}/miral/output.h
     append_event_filter.cpp             ${miral_include}/miral/append_event_filter.h
+    wayland_extensions.cpp              ${miral_include}/miral/wayland_extensions.h
     window.cpp                          ${miral_include}/miral/window.h
     window_info.cpp                     ${miral_include}/miral/window_info.h
     window_management_options.cpp       ${miral_include}/miral/window_management_options.h
@@ -82,6 +88,13 @@ target_include_directories(miral-internal
     PRIVATE ${MIRSERVER_INCLUDE_DIRS}
 )
 
+target_link_libraries(miral-internal
+    PRIVATE
+        mirserver
+        ${WAYLAND_CLIENT_LDFLAGS} ${WAYLAND_CLIENT_LIBRARIES}
+        ${YAML_LIBRARIES}
+)
+
 target_include_directories(miral
     PUBLIC  "${miral_include}" ${MIRCLIENT_INCLUDE_DIRS}
     PRIVATE ${MIRSERVER_INCLUDE_DIRS}
@@ -94,7 +107,6 @@ target_link_libraries(miral
     PRIVATE
         miral-internal
         mirserver
-        ${WAYLAND_CLIENT_LDFLAGS} ${WAYLAND_CLIENT_LIBRARIES}
 )
 
 set_target_properties(miral

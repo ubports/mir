@@ -450,11 +450,11 @@ protected:
     CachedPtr<scene::ApplicationNotRespondingDetector> application_not_responding_detector;
     CachedPtr<cookie::Authority> cookie_authority;
     CachedPtr<input::KeyMapper> key_mapper;
-    CachedPtr<ConsoleServices> console_services;
+    std::shared_ptr<ConsoleServices> console_services;
 
 private:
     std::shared_ptr<options::Configuration> const configuration_options;
-    std::shared_ptr<input::EventFilter> const default_filter;
+    std::shared_ptr<input::EventFilter> default_filter;
     CachedPtr<ObserverMultiplexer<graphics::DisplayConfigurationObserver>>
         display_configuration_observer_multiplexer;
     CachedPtr<ObserverMultiplexer<input::SeatObserver>>

@@ -74,10 +74,8 @@ auto create_window(MirConnection* connection, mir::client::Surface const& surfac
                 mir_output_is_enabled(output))
             {
                 id = mir_output_get_id(output);
-
-                MirOutputMode const* mode = mir_output_get_current_mode(output);
-                width = mir_output_mode_get_width(mode);
-                height = mir_output_mode_get_height(mode);
+                width = mir_output_get_logical_width(output);
+                height = mir_output_get_logical_height(output);
             }
         });
 

@@ -52,11 +52,11 @@ namespace
 struct TemporaryCompositeEventFilter : public mi::CompositeEventFilter
 {
     bool handle(MirEvent const&) override { return false; }
-    void append(std::shared_ptr<mi::EventFilter> const& filter) override
+    void append(std::weak_ptr<mi::EventFilter> const& filter) override
     {
         append_event_filters.push_back(filter);
     }
-    void prepend(std::shared_ptr<mi::EventFilter> const& filter) override
+    void prepend(std::weak_ptr<mi::EventFilter> const& filter) override
     {
         prepend_event_filters.push_back(filter);
     }
@@ -72,8 +72,8 @@ struct TemporaryCompositeEventFilter : public mi::CompositeEventFilter
         append_event_filters.clear();
         prepend_event_filters.clear();
     }
-    std::vector<std::shared_ptr<mi::EventFilter>> prepend_event_filters;
-    std::vector<std::shared_ptr<mi::EventFilter>> append_event_filters;
+    std::vector<std::weak_ptr<mi::EventFilter>> prepend_event_filters;
+    std::vector<std::weak_ptr<mi::EventFilter>> append_event_filters;
 };
 }
 
@@ -410,7 +410,7 @@ void mir::Server::run()
         run_mir(
             *self->server_config,
             [&](DisplayServer&)
-                { self->init_callback(); },
+                { self->init_callback(); self->init_callback = []{}; },
             self->terminator);
 
         self->exit_status = true;
@@ -443,9 +443,10 @@ void mir::Server::stop()
 {
     mir::log_info("Stopping");
     if (self->server_config)
-        if (auto const main_loop = the_main_loop())
+        if (auto const main_loop = the_main_loop().get())
         {
             self->stop_callback();
+            self->stop_callback = []{};
             main_loop->stop();
         }
 }

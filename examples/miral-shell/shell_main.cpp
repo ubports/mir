@@ -2,7 +2,7 @@
  * Copyright © 2016-2017 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify
- * under the terms of the GNU General Public License version 2 or 3 as as
+ * under the terms of the GNU General Public License version 2 or 3 as
  * published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -30,7 +30,7 @@
 #include <miral/command_line_option.h>
 #include <miral/cursor_theme.h>
 #include <miral/keymap.h>
-#include <miral/x11_support.h>
+#include <miral/wayland_extensions.h>
 
 #include <linux/input.h>
 
@@ -81,10 +81,8 @@ int main(int argc, char const* argv[])
 
     return runner.run_with(
         {
-            CommandLineOption{[&](std::string const& ) { },
-                              "desktop_file_hint", "Ignored for Unity8 compatibility", "miral-shell.desktop"},
             CursorTheme{"default:DMZ-White"},
-            X11Support{},
+            WaylandExtensions{},
             window_managers,
             display_configuration_options,
             launcher,

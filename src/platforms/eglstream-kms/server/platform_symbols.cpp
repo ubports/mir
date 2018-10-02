@@ -28,6 +28,7 @@
 #include "mir/log.h"
 #include "mir/graphics/egl_error.h"
 #include "one_shot_device_observer.h"
+#include "mir/raii.h"
 
 #include <boost/throw_exception.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -44,6 +45,8 @@ namespace mgc = mir::graphics::common;
 namespace mo = mir::options;
 namespace mge = mir::graphics::eglstream;
 
+namespace
+{
 EGLDeviceEXT find_device()
 {
     int device_count{0};
@@ -74,6 +77,7 @@ EGLDeviceEXT find_device()
         BOOST_THROW_EXCEPTION(std::runtime_error("Couldn't find EGLDeviceEXT supporting EGL_EXT_device_drm?"));
     }
     return *device;
+}
 }
 
 mir::UniqueModulePtr<mg::Platform> create_host_platform(
@@ -176,7 +180,7 @@ mg::PlatformPriority probe_graphics_platform(
                     mir::Fd drm_fd;
                     auto const devnum = mge::devnum_for_device(device);
 
-                    console->acquire_device(
+                    auto device_holder = console->acquire_device(
                         major(devnum), minor(devnum),
                         std::make_unique<mgc::OneShotDeviceObserver>(drm_fd)).get();
 
@@ -186,7 +190,51 @@ mg::PlatformPriority probe_graphics_platform(
                             "EGL_EXT_device_drm found, but can't acquire DRM node.");
                         return false;
                     }
-                    return true;
+
+                    int const drm_node_attrib[] = {
+                        EGL_DRM_MASTER_FD_EXT, static_cast<int>(drm_fd), EGL_NONE
+                    };
+                    EGLDisplay display = eglGetPlatformDisplayEXT(EGL_PLATFORM_DEVICE_EXT, device, drm_node_attrib);
+
+                    if (display == EGL_NO_DISPLAY)
+                    {
+                        mir::log_debug("Failed to create EGLDisplay: %s", mg::egl_category().message(eglGetError()).c_str());
+                        return false;
+                    }
+
+                    auto egl_init = mir::raii::paired_calls(
+                        [&display]()
+                        {
+                            EGLint major_ver{1}, minor_ver{4};
+                            if (!eglInitialize(display, &major_ver, &minor_ver))
+                            {
+                                mir::log_debug("Failed to initialise EGL: %s", mg::egl_category().message(eglGetError()).c_str());
+                                display = EGL_NO_DISPLAY;
+                            }
+                        },
+                        [&display]()
+                        {
+                            if (display != EGL_NO_DISPLAY)
+                            {
+                                eglTerminate(display);
+                            }
+                        });
+
+                    if (display == EGL_NO_DISPLAY)
+                    {
+                        return false;
+                    }
+
+                    if (epoxy_has_egl_extension(display, "EGL_EXT_output_base"))
+                    {
+                        return true;
+                    }
+                    else
+                    {
+                        mir::log_debug("EGL_EXT_device_drm found, but missing EGL_EXT_output_base extension.");
+                        mir::log_debug("Available extensions are: %s", eglQueryString(display, EGL_EXTENSIONS));
+                        return false;
+                    }
                 }
                 return false;
             }

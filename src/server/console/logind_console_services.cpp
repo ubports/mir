@@ -84,38 +84,40 @@ std::unique_ptr<LogindSession, decltype(&g_object_unref)> simple_proxy_on_system
     GDBusConnection* connection,
     char const* object_path)
 {
-    using namespace std::literals::string_literals;
-
-    GErrorPtr error;
-
     // GDBus proxies will use the thread-default main context at creation time.
-    LogindSession* proxy;
-    ml.run_with_context_as_thread_default(
-        [&proxy, connection, object_path, &error]()
+    return ml.run_with_context_as_thread_default(
+        [connection, object_path]()
         {
-            proxy = logind_session_proxy_new_sync(
-                connection,
-                G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-                "org.freedesktop.login1",
-                object_path,
-                nullptr,
-                &error);
-        });
-    if (!proxy)
-    {
-        auto error_msg = error ? error->message : "unknown error";
-        BOOST_THROW_EXCEPTION((
-            std::runtime_error{
-                "Failed to connect to DBus interface at "s +
-                object_path + ": " + error_msg}));
-    }
+            GErrorPtr error;
 
-    if (error)
-    {
-        mir::log_error("Proxy is non-null, but has error set?! Error: %s", error->message);
-    }
+            auto proxy = std::unique_ptr<LogindSession, decltype(&g_object_unref)>{
+                logind_session_proxy_new_sync(
+                    connection,
+                    G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
+                    "org.freedesktop.login1",
+                    object_path,
+                    nullptr,
+                    &error),
+                &g_object_unref};
 
-    return {proxy, &g_object_unref};
+            if (!proxy)
+            {
+                using namespace std::literals::string_literals;
+
+                auto error_msg = error ? error->message : "unknown error";
+                BOOST_THROW_EXCEPTION((
+                    std::runtime_error{
+                        "Failed to connect to DBus interface at "s +
+                        object_path + ": " + error_msg}));
+            }
+
+            if (error)
+            {
+                mir::log_error("Proxy is non-null, but has error set?! Error: %s", error->message);
+            }
+            return proxy;
+
+        }).get();
 }
 
 std::unique_ptr<LogindSeat, decltype(&g_object_unref)> simple_seat_proxy_on_system_bus(
@@ -125,35 +127,38 @@ std::unique_ptr<LogindSeat, decltype(&g_object_unref)> simple_seat_proxy_on_syst
 {
     using namespace std::literals::string_literals;
 
-    GErrorPtr error;
-
-    LogindSeat* proxy;
-    ml.run_with_context_as_thread_default(
-        [&proxy, connection, object_path, &error]()
+    return ml.run_with_context_as_thread_default(
+        [connection, object_path]()
         {
-            proxy = logind_seat_proxy_new_sync(
-                connection,
-                G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-                "org.freedesktop.login1",
-                object_path,
-                nullptr,
-                &error);
-        });
-    if (!proxy)
-    {
-        auto error_msg = error ? error->message : "unknown error";
-        BOOST_THROW_EXCEPTION((
-            std::runtime_error{
-                "Failed to connect to DBus interface at "s +
-                object_path + ": " + error_msg}));
-    }
+            GErrorPtr error;
 
-    if (error)
-    {
-        mir::log_error("Proxy is non-null, but has error set?! Error: %s", error->message);
-    }
+            auto proxy = std::unique_ptr<LogindSeat, decltype(&g_object_unref)>{
+                logind_seat_proxy_new_sync(
+                    connection,
+                    G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
+                    "org.freedesktop.login1",
+                    object_path,
+                    nullptr,
+                    &error),
+                &g_object_unref};
 
-    return {proxy, &g_object_unref};
+            if (!proxy)
+            {
+                using namespace std::literals::string_literals;
+                auto error_msg = error ? error->message : "unknown error";
+                BOOST_THROW_EXCEPTION((
+                    std::runtime_error{
+                        "Failed to connect to DBus interface at "s +
+                        object_path + ": " + error_msg}));
+            }
+
+            if (error)
+            {
+                mir::log_error("Proxy is non-null, but has error set?! Error: %s", error->message);
+            }
+
+            return proxy;
+        }).get();
 }
 
 std::string object_path_for_current_session(LogindSeat* seat_proxy)
@@ -206,28 +211,32 @@ connect_to_system_bus(mir::GLibMainLoop& ml)
                 "Failed to find address of DBus system bus: "s + error_msg}));
     }
 
-    GDBusConnection* bus;
-    ml.run_with_context_as_thread_default(
-        [&bus, &system_bus_address, &error]()
+    return ml.run_with_context_as_thread_default(
+        [&system_bus_address]()
         {
-            bus = g_dbus_connection_new_for_address_sync(
-                system_bus_address.get(),
-                static_cast<GDBusConnectionFlags>(
-                    G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT |
-                    G_DBUS_CONNECTION_FLAGS_MESSAGE_BUS_CONNECTION),
-                nullptr,
-                nullptr,
-                &error);
-        });
-    if (!bus)
-    {
-        auto error_msg = error ? error->message : "unknown error";
-        BOOST_THROW_EXCEPTION((
-          std::runtime_error{
-              "Failed to connect to DBus system bus: "s + error_msg}));
-    }
+            GErrorPtr error;
 
-    return {bus, &g_object_unref};
+            auto bus = std::unique_ptr<GDBusConnection, decltype(&g_object_unref)>{
+                g_dbus_connection_new_for_address_sync(
+                    system_bus_address.get(),
+                    static_cast<GDBusConnectionFlags>(
+                        G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT |
+                        G_DBUS_CONNECTION_FLAGS_MESSAGE_BUS_CONNECTION),
+                    nullptr,
+                    nullptr,
+                    &error),
+                &g_object_unref};
+
+            if (!bus)
+            {
+                auto error_msg = error ? error->message : "unknown error";
+                BOOST_THROW_EXCEPTION((
+                    std::runtime_error{
+                        "Failed to connect to DBus system bus: "s + error_msg}));
+            }
+
+            return bus;
+        }).get();
 }
 }
 
@@ -259,7 +268,7 @@ mir::LogindConsoleServices::LogindConsoleServices(std::shared_ptr<mir::GLibMainL
 
     g_signal_connect(
         G_OBJECT(session_proxy.get()),
-        "notify::state",
+        "notify::active",
         G_CALLBACK(&LogindConsoleServices::on_state_change),
         this);
     g_signal_connect(
@@ -437,6 +446,26 @@ void complete_take_device_call(
         std::move(dbus_result),
         fd_list);
 }
+
+void complete_release_device_call(
+    GObject* proxy,
+    GAsyncResult* result,
+    gpointer) noexcept
+{
+    GErrorPtr error;
+
+    if (!logind_session_call_release_device_finish(
+        LOGIND_SESSION(proxy),
+        result,
+        &error))
+    {
+        auto const error_message = error ? error->message : "unknown error";
+
+        mir::log_warning(
+            "ReleaseDevice call failed: %s",
+            error_message);
+    }
+}
 }
 
 std::future<std::unique_ptr<mir::Device>> mir::LogindConsoleServices::acquire_device(
@@ -456,10 +485,52 @@ std::future<std::unique_ptr<mir::Device>> mir::LogindConsoleServices::acquire_de
                 if (it->second == destroying)
                 {
                     acquired_devices.erase(it);
+                    /* Like TakeDevice, we might be trying to release a device before the
+                     * main loop is running.
+                     *
+                     * Opportunistically release the device asynchronously
+                     */
+                    if (ml->running())
+                    {
+                        ml->run_with_context_as_thread_default(
+                            [
+                                session = std::shared_ptr<GObject>{
+                                    G_OBJECT(g_object_ref(session_proxy.get())),
+                                    &g_object_unref},
+                                devnum
+                            ]()
+                            {
+                                logind_session_call_release_device(
+                                    LOGIND_SESSION(session.get()),
+                                    major(devnum), minor(devnum),
+                                    nullptr,
+                                    &complete_release_device_call,
+                                    nullptr);
+                            });
+                    }
+                    else
+                    {
+                        GErrorPtr error;
+                        if (!logind_session_call_release_device_sync(
+                            session_proxy.get(),
+                            major(devnum), minor(devnum),
+                            nullptr,
+                            &error))
+                        {
+                            mir::log_info("Failed to release device %i:%i: %s",
+                                major(devnum),
+                                minor(devnum),
+                                error->message);
+                        }
+                    }
                 }
             }
         });
-    acquired_devices.insert(std::make_pair(makedev(major, minor), context->device.get()));
+
+    if (!acquired_devices.insert(std::make_pair(makedev(major, minor), context->device.get())).second)
+    {
+        BOOST_THROW_EXCEPTION((std::runtime_error{"Attempted to acquire a device multiple times"}));
+    }
 
     auto future = context->promise.get_future();
 
@@ -493,7 +564,7 @@ std::future<std::unique_ptr<mir::Device>> mir::LogindConsoleServices::acquire_de
                     nullptr,
                     &complete_take_device_call,
                     userdata);
-            });
+            }); // We don't need to wait for completion here, so throw away the std::future.
     }
     else
     {
@@ -549,8 +620,8 @@ void mir::LogindConsoleServices::on_state_change(
     // No threadsafety concerns, as this is only ever called from the glib mainloop.
     auto me = static_cast<LogindConsoleServices*>(ctx);
 
-    auto const state = logind_session_get_state(LOGIND_SESSION(session_proxy));
-    if (strncmp(state, "active", strlen("active")) == 0)
+    auto const active = logind_session_get_active(LOGIND_SESSION(session_proxy));
+    if (active)
     {
         // “active” means running and foregrounded.
         if (!me->active)
@@ -570,6 +641,23 @@ void mir::LogindConsoleServices::on_state_change(
     }
 }
 
+namespace {
+void complete_pause_device_complete(
+    GObject* session_proxy,
+    GAsyncResult* result,
+    gpointer)
+{
+    GErrorPtr err;
+    if (!logind_session_call_pause_device_complete_finish(
+        LOGIND_SESSION(session_proxy),
+        result,
+        &err))
+    {
+        mir::log_warning("PauseDeviceComplete failed: %s", err->message);
+    }
+}
+}
+
 void mir::LogindConsoleServices::on_pause_device(
     LogindSession*,
     unsigned major, unsigned minor,
@@ -585,13 +673,54 @@ void mir::LogindConsoleServices::on_pause_device(
         using namespace std::literals::string_literals;
         if ("pause"s == suspend_type)
         {
+            mir::log_debug("Received logind pause event for device %i:%i", major, minor);
+            it->second->emit_suspended();
+            logind_session_call_pause_device_complete(
+                me->session_proxy.get(),
+                major, minor,
+                nullptr,
+                &complete_pause_device_complete,
+                nullptr);
+        }
+        else if ("force"s == suspend_type)
+        {
+            mir::log_debug("Received logind force-pause event for device %i:%i", major, minor);
             it->second->emit_suspended();
         }
         else if ("gone"s == suspend_type)
         {
+            if (major == 226)
+            {
+                /* This is a DRM device.
+                 *
+                 * During startup, we TakeDevice during probe() to check that we can
+                 * actually use the DRM device; we ReleaseDevice it before returning from probe().
+                 *
+                 * Then, during Platform construction we TakeDevice again.
+                 * For some reason, logind feels the need to send a “gone” signal after the
+                 * second TakeDevice call, which would result in us dropping the device and
+                 * everything breaking.
+                 *
+                 * A DRM device is quite unlikely to *actually* be gone, so just ignore
+                 * PauseDevice("gone") signals for DRM devices.
+                 */
+                mir::log_debug(
+                    "Ignoring logind PauseDevice(\"gone\") event for DRM device %i:%i",
+                    major, minor);
+                return;
+            }
             it->second->emit_removed();
             // The device is gone; logind promises not to send further events for it
             me->acquired_devices.erase(it);
+            // …unfortunately, logind is a FILTHY LIAR.
+            // We're safe to call this asynchronously; there must be a running main loop,
+            // because we've been dispatched from it.
+            logind_session_call_release_device(
+                me->session_proxy.get(),
+                major, minor,
+                nullptr,
+                &complete_release_device_call,
+                nullptr);
         }
         else
         {
@@ -683,3 +812,74 @@ GDBusMessage* mir::LogindConsoleServices::resume_device_dbus_filter(
     return nullptr;
 }
 #endif
+
+namespace
+{
+class LogindVTSwitcher : public mir::VTSwitcher
+{
+public:
+    LogindVTSwitcher(
+        std::unique_ptr<LogindSeat, decltype(&g_object_unref)> seat_proxy,
+        std::shared_ptr<mir::GLibMainLoop> ml)
+        : seat_proxy{std::move(seat_proxy)},
+          ml{std::move(ml)}
+    {
+    }
+
+    void switch_to(
+        int vt_number,
+        std::function<void(std::exception const&)> error_handler) override
+    {
+        ml->run_with_context_as_thread_default(
+            [this, vt_number, error_handler = std::move(error_handler)]()
+            {
+                logind_seat_call_switch_to(
+                    seat_proxy.get(),
+                    vt_number,
+                    nullptr,
+                    &LogindVTSwitcher::complete_switch_to,
+                    new std::function<void(std::exception const&)>{error_handler});
+            }); // No need to wait for this to run; drop the std::future on the floor
+    }
+
+private:
+    static void complete_switch_to(
+        GObject* seat_proxy,
+        GAsyncResult* result,
+        gpointer userdata)
+    {
+        auto const error_handler = std::unique_ptr<std::function<void(std::exception const&)>>{
+            static_cast<std::function<void(std::exception const&)>*>(userdata)};
+        GErrorPtr error;
+
+        if (!logind_seat_call_switch_to_finish(
+           LOGIND_SEAT(seat_proxy),
+           result,
+           &error))
+        {
+            auto const err = boost::enable_error_info(
+                std::runtime_error{
+                    std::string{"Logind request to switch vt failed: "} +
+                    error->message})
+                        << boost::throw_file(__FILE__)
+                        << boost::throw_function(__PRETTY_FUNCTION__)
+                        << boost::throw_line(__LINE__);
+
+            (*error_handler)(err);
+        }
+    }
+
+    std::unique_ptr<LogindSeat, decltype(&g_object_unref)> const seat_proxy;
+    std::shared_ptr<mir::GLibMainLoop> const ml;
+};
+}
+
+std::unique_ptr<mir::VTSwitcher> mir::LogindConsoleServices::create_vt_switcher()
+{
+    // TODO: Query logind whether VTs exist at all, and throw if they don't.
+    return std::make_unique<LogindVTSwitcher>(
+        std::unique_ptr<LogindSeat, decltype(&g_object_unref)>{
+            LOGIND_SEAT(g_object_ref(seat_proxy.get())),
+            &g_object_unref},
+        ml);
+}

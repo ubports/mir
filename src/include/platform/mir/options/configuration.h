@@ -54,6 +54,8 @@ extern char const* const debug_opt;
 extern char const* const composite_delay_opt;
 extern char const* const enable_key_repeat_opt;
 extern char const* const x11_display_opt;
+extern char const* const wayland_extensions_opt;
+extern char const* const wayland_extensions_value;
 
 extern char const* const name_opt;
 extern char const* const offscreen_opt;
@@ -67,6 +69,13 @@ extern char const* const lttng_opt_value;
 extern char const* const platform_graphics_lib;
 extern char const* const platform_input_lib;
 extern char const* const platform_path;
+
+extern char const* const console_provider;
+extern char const* const logind_console;
+extern char const* const vt_console;
+extern char const* const null_console;
+extern char const* const auto_console;
+
 extern char const* const vt_option_name;
 
 class Configuration

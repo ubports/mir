@@ -27,9 +27,9 @@ project(Mir)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-set(MIR_VERSION_MAJOR 0)
-set(MIR_VERSION_MINOR 32)
-set(MIR_VERSION_PATCH 1)
+set(MIR_VERSION_MAJOR 1)
+set(MIR_VERSION_MINOR 0)
+set(MIR_VERSION_PATCH 0)
 
 add_definitions(-DMIR_VERSION_MAJOR=${MIR_VERSION_MAJOR})
 add_definitions(-DMIR_VERSION_MINOR=${MIR_VERSION_MINOR})
@@ -84,7 +84,7 @@ if(HAS_W_PSABI)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-psabi")
 endif()
 
-set(MIR_USE_LD ld CACHE STRING "Linker to use")
+set(MIR_USE_LD gold CACHE STRING "Linker to use")
 set_property(CACHE MIR_USE_LD PROPERTY STRINGS "ld;gold;lld")
 if(MIR_USE_LD MATCHES "gold")
   set (CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=gold")
@@ -131,6 +131,13 @@ if(cmake_build_type_lower MATCHES "addresssanitizer")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
   set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -fsanitize=address")
   set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=address")
+  if (CMAKE_COMPILER_IS_GNUCXX)
+    # Work around GCC bug. It should automatically link to asan when
+    # -fsanitize=address is used, but doesn't.
+    #
+    # Linking everything with asan is harmless and simple, so do that.
+    link_libraries(asan) # Workaround for LP:1413474
+  endif()
 elseif(cmake_build_type_lower MATCHES "threadsanitizer")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread -fno-omit-frame-pointer")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=thread -fno-omit-frame-pointer")
@@ -150,6 +157,16 @@ elseif(cmake_build_type_lower MATCHES "ubsanitizer")
   set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=undefined")
   # "Symbol already defined" errors occur with pre-compiled headers
   SET(MIR_USE_PRECOMPILED_HEADERS OFF CACHE BOOL "Use precompiled headers" FORCE)
+  if (CMAKE_COMPILER_IS_GNUCXX)
+    # Work around GCC bug. It should automatically link to asan when
+    # -fsanitize=undefined is used, but doesn't.
+    #
+    # Linking everything with ubsan is harmless and simple, so do that.
+    link_libraries(ubsan) # Workaround for LP:1413474
+  endif()
+  # We have inline classes as interfaces used by .so's and implemented elsewhere.
+  # This results in multiple trivial implementations. So let's not warn about that.
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-sanitize=vptr")
 else()
   # AddressSanitizer builds fail if we disallow undefined symbols
   set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--no-undefined")

@@ -55,7 +55,9 @@ char const* const mo::fatal_except_opt            = "on-fatal-error-except";
 char const* const mo::debug_opt                   = "debug";
 char const* const mo::composite_delay_opt         = "composite-delay";
 char const* const mo::enable_key_repeat_opt       = "enable-key-repeat";
-char const* const mo::x11_display_opt             = "display";
+char const* const mo::x11_display_opt             = "x11-display-experimental";
+char const* const mo::wayland_extensions_opt      = "wayland_extensions";
+char const* const mo::wayland_extensions_value    = "wl_shell:xdg_wm_base:zxdg_shell_v6";
 
 char const* const mo::off_opt_value = "off";
 char const* const mo::log_opt_value = "log";
@@ -64,6 +66,13 @@ char const* const mo::lttng_opt_value = "lttng";
 char const* const mo::platform_graphics_lib = "platform-graphics-lib";
 char const* const mo::platform_input_lib = "platform-input-lib";
 char const* const mo::platform_path = "platform-path";
+
+char const* const mo::console_provider = "console-provider";
+char const* const mo::logind_console = "logind";
+char const* const mo::vt_console = "vt";
+char const* const mo::null_console = "none";
+char const* const mo::auto_console = "auto";
+
 char const* const mo::vt_option_name = "vt";
 
 
@@ -205,9 +214,19 @@ mo::DefaultConfiguration::DefaultConfiguration(
             "in unexpected ways] throw an exception (instead of a core dump)")
         (debug_opt, "Enable extra development debugging. "
             "This is only interesting for people doing Mir server or client development.")
+        (console_provider,
+            po::value<std::string>()->default_value("auto"),
+            "Console device handling\n"
+            "How Mir handles console-related tasks (device handling, VT switching, etc)\n"
+            "Options:\n"
+            "logind: use logind\n"
+            "vt: use the Linux VT subsystem. Requires root.\n"
+            "none: support no console-related tasks. Useful for nested platforms which do not "
+                "need raw device access and which don't have a VT concept\n"
+            "auto: detect the appropriate provider.")
         (vt_option_name,
             boost::program_options::value<int>()->default_value(0),
-            "When running on a VT, VT to run on or 0 to use current.");
+            "[requires --console-provider=vt] VT to run on or 0 to use current.");
 
         add_platform_options();
 }

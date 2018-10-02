@@ -52,7 +52,7 @@ class WlSeat;
 class OutputManager;
 
 class Shell;
-class DisplayChanger;
+class MirDisplay;
 class SessionAuthorizer;
 class DataDeviceManager;
 
@@ -83,7 +83,7 @@ public:
     WaylandConnector(
         optional_value<std::string> const& display_name,
         std::shared_ptr<Shell> const& shell,
-        DisplayChanger& display_config,
+        std::shared_ptr<MirDisplay> const& display_config,
         std::shared_ptr<input::InputDeviceHub> const& input_hub,
         std::shared_ptr<input::Seat> const& seat,
         std::shared_ptr<graphics::GraphicBufferAllocator> const& allocator,
@@ -125,6 +125,9 @@ private:
     // Only accessed on event loop
     std::unordered_map<int, std::function<void(std::shared_ptr<Session> const& session)>> mutable connect_handlers;
 };
+
+auto create_wl_shell(wl_display* display, std::shared_ptr<Shell> const& shell, WlSeat* seat, OutputManager* const output_manager)
+    -> std::shared_ptr<void>;
 }
 }
 

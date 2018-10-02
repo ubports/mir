@@ -36,6 +36,7 @@
 #include "mir/test/doubles/mock_event_handler_register.h"
 #include "mir/test/auto_unblock_thread.h"
 #include "mir/test/doubles/simple_device_observer.h"
+#include "mir/test/doubles/null_device_observer.h"
 
 #include "src/server/console/logind_console_services.h"
 
@@ -196,7 +197,7 @@ public:
     {
         // Tests cases *must* stop the mainloop thread before destroying
         // block scope objects that are referenced by enqueued logic.
-        ASSERT_TRUE(ml_thread_stopped);
+        EXPECT_TRUE(ml_thread_stopped);
 
         // Print the dbusmock output if we've failed.
         auto const test_info = ::testing::UnitTest::GetInstance()->current_test_info();
@@ -453,6 +454,40 @@ public:
         }
     }
 
+    void add_release_device_to_session(
+        char const* session_path,
+        char const* mock_code = "")
+    {
+        std::unique_ptr<GVariant, decltype(&g_variant_unref)> result{nullptr, &g_variant_unref};
+
+        GError* error{nullptr};
+        result.reset(
+            g_dbus_connection_call_sync(
+                bus_connection.get(),
+                "org.freedesktop.login1",
+                session_path,
+                "org.freedesktop.DBus.Mock",
+                "AddMethod",
+                g_variant_new(
+                    "(sssss)",
+                    "org.freedesktop.login1.Session",
+                    "ReleaseDevice",
+                    "uu",
+                    "",
+                    mock_code),
+                nullptr,
+                G_DBUS_CALL_FLAGS_NONE,
+                1000,
+                nullptr,
+                &error));
+
+        if (!result)
+        {
+            auto error_msg = error ? error->message : "Unknown error";
+            BOOST_THROW_EXCEPTION((std::runtime_error{error_msg}));
+        }
+    }
+
     void ensure_mock_logind()
     {
         if (dbusmock)
@@ -684,6 +719,261 @@ public:
         if (!result)
         {
             BOOST_THROW_EXCEPTION((std::runtime_error{error->message}));
+        }
+    }
+
+    void add_switch_to_to_seat(
+        char const* seat_path,
+        char const* mock_code)
+    {
+        auto result = std::unique_ptr<GVariant, decltype(&g_variant_unref)>{
+            g_dbus_connection_call_sync(
+                bus_connection.get(),
+                "org.freedesktop.login1",
+                seat_path,
+                "org.freedesktop.DBus.Mock",
+                "AddMethod",
+                g_variant_new(
+                    "(sssss)",
+                    "org.freedesktop.login1.Seat",
+                    "SwitchTo",
+                    "u",
+                    "",
+                    mock_code),
+                nullptr,
+                G_DBUS_CALL_FLAGS_NO_AUTO_START,
+                1000,
+                nullptr,
+                nullptr),
+            &g_variant_unref};
+
+        if (!result)
+        {
+            BOOST_THROW_EXCEPTION((std::runtime_error{"Failed to add SwitchTo"}));
+        }
+    }
+
+    void add_pause_device_complete_to_session(
+        char const* session_path,
+        char const* mock_code = "")
+    {
+        auto result = std::unique_ptr<GVariant, decltype(&g_variant_unref)>{
+            g_dbus_connection_call_sync(
+                bus_connection.get(),
+                "org.freedesktop.login1",
+                session_path,
+                "org.freedesktop.DBus.Mock",
+                "AddMethod",
+                g_variant_new(
+                    "(sssss)",
+                    "org.freedesktop.login1.Session",
+                    "PauseDeviceComplete",
+                    "uu",
+                    "",
+                    mock_code),
+                nullptr,
+                G_DBUS_CALL_FLAGS_NO_AUTO_START,
+                1000,
+                nullptr,
+                nullptr),
+            &g_variant_unref};
+
+        if (!result)
+        {
+            BOOST_THROW_EXCEPTION((std::runtime_error{"Failed to add PauseDeviceComplete"}));
+        }
+    }
+
+    struct CallInfo
+    {
+        using GVariantPtr = std::unique_ptr<GVariant, decltype(&g_variant_unref)>;
+
+        CallInfo(
+            uint64_t timestamp,
+            std::string method_name,
+            GVariantIter* argument_array)
+            : timestamp{timestamp},
+              method_name{std::move(method_name)}
+        {
+            arguments.reserve(g_variant_iter_n_children(argument_array));
+
+            GVariant* argument;
+            while (g_variant_iter_next(argument_array, "v", &argument))
+            {
+                // We own a reference to argument, so we don't need to increase the refcount.
+                arguments.emplace_back(GVariantPtr{argument, &g_variant_unref});
+            }
+        }
+
+        uint64_t timestamp;
+        std::string method_name;
+        std::vector<GVariantPtr> arguments;
+    };
+
+    std::vector<CallInfo> get_calls_for_object(char const* object_path)
+    {
+        auto result = std::unique_ptr<GVariant, decltype(&g_variant_unref)>{
+            g_dbus_connection_call_sync(
+                bus_connection.get(),
+                "org.freedesktop.login1",
+                object_path,
+                "org.freedesktop.DBus.Mock",
+                "GetCalls",
+                g_variant_new("()"),
+                nullptr,
+                G_DBUS_CALL_FLAGS_NO_AUTO_START,
+                1000,
+                nullptr,
+                nullptr),
+            &g_variant_unref};
+
+        if (!result)
+        {
+            BOOST_THROW_EXCEPTION((std::runtime_error{"Failed to query list of mock calls made"}));
+        }
+
+        auto variant_iter = g_variant_iter_new(g_variant_get_child_value(result.get(), 0));
+        std::vector<CallInfo> calls;
+        calls.reserve(g_variant_iter_n_children(variant_iter));
+
+        uint64_t timestamp;
+        char const* method_name;
+        GVariantIter* arguments;
+        while (g_variant_iter_next(variant_iter, "(tsav)", &timestamp, &method_name, &arguments))
+        {
+            calls.emplace_back(
+                timestamp,
+                method_name,
+                arguments);
+            g_variant_iter_free(arguments);
+        }
+
+        return calls;
+    }
+
+    std::future<CallInfo> expect_call(
+        std::string object_path,
+        std::string method_name)
+    {
+        auto promised_call = std::make_shared<std::promise<CallInfo>>();
+        auto future_call = promised_call->get_future();
+
+        ml->run_with_context_as_thread_default(
+            [
+                this,
+                path = std::move(object_path),
+                name = std::move(method_name),
+                promised_call
+            ]()
+            {
+                struct HandlerCtx
+                {
+                    std::remove_const<decltype(promised_call)>::type promise;
+                    guint subscription_id;
+                };
+
+                auto context = new HandlerCtx;
+                context->promise = promised_call;
+
+                context->subscription_id = g_dbus_connection_signal_subscribe(
+                    bus_connection.get(),
+                    nullptr,
+                    "org.freedesktop.DBus.Mock",
+                    "MethodCalled",
+                    path.c_str(),
+                    name.c_str(),
+                    G_DBUS_SIGNAL_FLAGS_NONE,
+                    [](GDBusConnection* connection,
+                       gchar const* /*sender_name*/,
+                       gchar const* /*object_path*/,
+                       gchar const* /*interface_name*/,
+                       gchar const* /*signal_name*/,
+                       GVariant* parameters,
+                       gpointer ctx) noexcept
+                    {
+                        auto context = static_cast<HandlerCtx*>(ctx);
+
+                        GVariant* argument_array;
+                        char const* method_name;
+
+                        g_variant_get(parameters, "(&s@av)", &method_name, &argument_array);
+                        auto iter = g_variant_iter_new(argument_array);
+                        g_variant_unref(argument_array);
+
+                        context->promise->set_value(
+                            CallInfo{
+                                static_cast<uint64_t>(
+                                    std::chrono::steady_clock::now().time_since_epoch().count()),
+                                method_name,
+                                iter
+                            });
+
+                        g_variant_iter_free(iter);
+
+                        g_dbus_connection_signal_unsubscribe(
+                            connection,
+                            context->subscription_id);
+                    },
+                    context,
+                    [](gpointer ctx)
+                    {
+                        delete static_cast<HandlerCtx*>(ctx);
+                    });
+            }).get(); // Make sure our signal handler is actually registered before continuing.
+        return future_call;
+    }
+
+    template<typename T, typename R>
+    void wait_for_dbus_sync_point(std::chrono::duration<T, R> wait_for)
+    {
+        // Add a method we can call…
+        auto result = std::unique_ptr<GVariant, decltype(&g_variant_unref)>{
+            g_dbus_connection_call_sync(
+                bus_connection.get(),
+                "org.freedesktop.login1",
+                "/org/freedesktop/login1",
+                "org.freedesktop.DBus.Mock",
+                "AddMethod",
+                g_variant_new(
+                    "(sssss)",
+                    "org.freedesktop.DBus.Mock",
+                    "Syncpoint",
+                    "",
+                    "",
+                    ""),
+                nullptr,
+                G_DBUS_CALL_FLAGS_NO_AUTO_START,
+                1000,
+                nullptr,
+                nullptr),
+            &g_variant_unref};
+
+        // …subscribe to a notification for when it's called…
+        auto syncpoint_called = expect_call("/org/freedesktop/login1", "Syncpoint");
+
+        // …call it…
+        result.reset(
+            g_dbus_connection_call_sync(
+                bus_connection.get(),
+                "org.freedesktop.login1",
+                "/org/freedesktop/login1",
+                "org.freedesktop.DBus.Mock",
+                "Syncpoint",
+                nullptr,
+                nullptr,
+                G_DBUS_CALL_FLAGS_NO_AUTO_START,
+                1000,
+                nullptr,
+                nullptr));
+
+        /*
+         * …now, because signals are handled in-order, we know that any
+         * previous DBus call or signal will have been processed by the time
+         * the Syncpoint-called signal is received
+         */
+        if (syncpoint_called.wait_for(wait_for) != std::future_status::ready)
+        {
+            BOOST_THROW_EXCEPTION((std::runtime_error{"Timeout waiting for syncpoint"}));
         }
     }
 
@@ -964,6 +1254,77 @@ TEST_F(LogindConsoleServices, device_suspended_callback_called_on_suspend)
     emit_device_suspended(session_path.c_str(), 22, 33, SuspendType::Paused);
 
     EXPECT_TRUE(suspended->wait_for(30s));
+    stop_mainloop();
+}
+
+TEST_F(LogindConsoleServices, acks_device_suspend_signal)
+{
+    ensure_mock_logind();
+
+    auto session_path = add_any_active_session();
+    add_take_device_to_session(
+        session_path.c_str(),
+        "ret = (os.open('/dev/zero', os.O_RDONLY), False)");
+    add_pause_device_complete_to_session(session_path.c_str());
+
+    mir::LogindConsoleServices services{the_main_loop()};
+
+    auto device = services.acquire_device(
+        22, 33,
+        std::make_unique<mtd::NullDeviceObserver>());
+
+    ASSERT_THAT(device.wait_for(30s), Eq(std::future_status::ready));
+
+    auto pause_ack_call = expect_call(
+        session_path,
+        "PauseDeviceComplete");
+
+    emit_device_suspended(session_path.c_str(), 22, 33, SuspendType::Paused);
+
+    ASSERT_THAT(pause_ack_call.wait_for(30s), Eq(std::future_status::ready));
+
+    auto call_details = pause_ack_call.get();
+
+    ASSERT_THAT(call_details.arguments, SizeIs(2));
+
+    EXPECT_THAT(g_variant_get_uint32(call_details.arguments[0].get()), Eq(22));
+    EXPECT_THAT(g_variant_get_uint32(call_details.arguments[1].get()), Eq(33));
+
+    stop_mainloop();
+}
+
+TEST_F(LogindConsoleServices, handles_ack_device_suspend_failure)
+{
+    ensure_mock_logind();
+
+    auto session_path = add_any_active_session();
+    add_take_device_to_session(
+        session_path.c_str(),
+        "ret = (os.open('/dev/zero', os.O_RDONLY), False)");
+    add_pause_device_complete_to_session(
+        session_path.c_str(),
+        "raise dbus.exceptions.DBusException('Device or resource busy (36)', name='System.Error.EBUSY')");
+
+    mir::LogindConsoleServices services{the_main_loop()};
+
+    auto device = services.acquire_device(
+        22, 33,
+        std::make_unique<mtd::NullDeviceObserver>());
+
+    ASSERT_THAT(device.wait_for(30s), Eq(std::future_status::ready));
+
+    auto pause_ack_call = expect_call(
+        session_path,
+        "PauseDeviceComplete");
+
+    emit_device_suspended(session_path.c_str(), 22, 33, SuspendType::Paused);
+
+    ASSERT_THAT(pause_ack_call.wait_for(30s), Eq(std::future_status::ready));
+
+    // We only want to assert that this doesn't blow up; insert a sync-point
+    // to ensure the ack call has been processed.
+    wait_for_dbus_sync_point(30s);
+
     stop_mainloop();
 }
 
@@ -1261,5 +1622,148 @@ TEST_F(LogindConsoleServices, can_acquire_device_without_running_main_loop)
             [](){})).get();
 
     EXPECT_TRUE(device_acquired);
+    stop_mainloop();
+}
+
+TEST_F(LogindConsoleServices, creates_vt_switcher_when_vt_switching_possible)
+{
+    ensure_mock_logind();
+    add_any_active_session();
+
+    mir::LogindConsoleServices console{the_main_loop()};
+
+    EXPECT_THAT(console.create_vt_switcher(), NotNull());
+
+    stop_mainloop();
+}
+
+//TODO: Add test for create_vt_switcher() failing when Logind *can't* switch VTs
+
+TEST_F(LogindConsoleServices, vt_switcher_calls_error_handler_on_error)
+{
+    ensure_mock_logind();
+    add_seat("seat0");
+    add_session(
+        "s1",
+        "seat0",
+        1000,
+        "ubuntu",
+        true,
+        "");
+
+    add_switch_to_to_seat(
+        "/org/freedesktop/login1/seat/seat0",
+        "raise dbus.exceptions.DBusException('No such file or directory (2)', name='System.Error.ENOENT')");
+
+    mir::LogindConsoleServices console{the_main_loop()};
+    auto switcher = console.create_vt_switcher();
+
+    auto error_received = std::make_shared<mt::Signal>();
+
+    switcher->switch_to(
+        7,
+        [error_received](std::exception const& err)
+        {
+            EXPECT_THAT(dynamic_cast<std::runtime_error const*>(&err), NotNull());
+            EXPECT_THAT(err.what(), ContainsRegex(".*No such file or directory.*"));
+            error_received->raise();
+        });
+    EXPECT_TRUE(error_received->wait_for(30s));
+
+    stop_mainloop();
+}
+
+TEST_F(LogindConsoleServices, vt_switcher_calls_switch_to_with_correct_argument)
+{
+    ensure_mock_logind();
+    add_seat("seat0");
+    add_session(
+        "s1",
+        "seat0",
+        1000,
+        "ubuntu",
+        true,
+        "");
+
+    add_switch_to_to_seat(
+        "/org/freedesktop/login1/seat/seat0",
+        "");
+
+    mir::LogindConsoleServices console{the_main_loop()};
+    auto switcher = console.create_vt_switcher();
+
+    auto switch_to_future = expect_call(
+        "/org/freedesktop/login1/seat/seat0",
+        "SwitchTo");
+
+    switcher->switch_to(
+        3,
+        [](auto){});
+
+    ASSERT_THAT(switch_to_future.wait_for(30s), Eq(std::future_status::ready));
+    auto switch_to_call = switch_to_future.get();
+
+    ASSERT_THAT(switch_to_call.arguments.size(), Eq(1));
+
+    unsigned vt_arg;
+    g_variant_get(
+        switch_to_call.arguments[0].get(),
+        "u",
+        &vt_arg);
+
+    EXPECT_THAT(vt_arg, Eq(3));
+
+    stop_mainloop();
+}
+
+TEST_F(LogindConsoleServices, destroying_device_handle_releases_logind_device)
+{
+    ensure_mock_logind();
+    auto const session_path = add_any_active_session();
+
+    add_take_device_to_session(
+        session_path.c_str(),
+        "ret = (os.open('/dev/zero', os.O_RDONLY), False)");
+    add_release_device_to_session(
+        session_path.c_str());
+
+    mir::LogindConsoleServices services{the_main_loop()};
+
+    int const device_major{42};
+    int const device_minor{88};
+
+    bool device_acquired{false};
+    auto device = services.acquire_device(
+        device_major, device_minor,
+        std::make_unique<mtd::SimpleDeviceObserver>(
+            [&device_acquired](auto) { device_acquired = true; },
+            [](){},
+            [](){})).get();
+
+    ASSERT_TRUE(device_acquired);
+
+    auto future_call = expect_call(session_path.c_str(), "ReleaseDevice");
+
+    device.reset();
+
+    ASSERT_THAT(future_call.wait_for(30s), Eq(std::future_status::ready));
+
+    auto call_info = future_call.get();
+    ASSERT_THAT(call_info.arguments.size(), Eq(2));
+
+    int released_major, released_minor;
+
+    g_variant_get(
+        call_info.arguments[0].get(),
+        "u",
+        &released_major);
+    g_variant_get(
+        call_info.arguments[1].get(),
+        "u",
+        &released_minor);
+
+    EXPECT_THAT(released_major, Eq(device_major));
+    EXPECT_THAT(released_minor, Eq(device_minor));
+
     stop_mainloop();
 }

@@ -61,11 +61,11 @@ public:
 
     ~WindowWlSurfaceRole() override;
 
+    std::shared_ptr<bool> destroyed_flag() const { return destroyed; }
     SurfaceId surface_id() const override { return surface_id_; };
 
     void populate_spec_with_surface_data(shell::SurfaceSpecification& spec);
     void refresh_surface_data_now() override;
-    void become_surface_role();
 
     void apply_spec(shell::SurfaceSpecification const& new_spec);
     void set_geometry(int32_t x, int32_t y, int32_t width, int32_t height);
@@ -79,11 +79,11 @@ public:
 
     void set_state_now(MirWindowState state);
 
-    virtual void handle_resize(geometry::Size const& new_size) = 0;
+    virtual void handle_resize(std::experimental::optional<geometry::Point> const& new_top_left,
+                               geometry::Size const& new_size) = 0;
 
 protected:
     std::shared_ptr<bool> const destroyed;
-    wl_client* const client;
 
     geometry::Size window_size();
     MirWindowState window_state();
@@ -93,6 +93,7 @@ protected:
     void commit(WlSurfaceState const& state) override;
 
 private:
+    wl_client* const client;
     WlSurface* const surface;
     std::shared_ptr<frontend::Shell> const shell;
     OutputManager* output_manager;
