@@ -127,12 +127,12 @@ void mrl::DisplayConfigurationReport::log_configuration(
 
             int width_mm = out.physical_size_mm.width.as_int();
             int height_mm = out.physical_size_mm.height.as_int();
-            float inches =
-                sqrtf(width_mm * width_mm + height_mm * height_mm) / 25.4;
+            //float inches =
+            //    sqrtf(width_mm * width_mm + height_mm * height_mm) / 25.4;
 
             logger->log(component, severity,
-                        "%sPhysical size %.1f\" %dx%dmm",
-                        indent, inches, width_mm, height_mm);
+                        "%sPhysical size %dx%dmm",
+                        indent, width_mm, height_mm);
 
             static const char* const power_mode[] =
                 {"on", "in standby", "suspended", "off"};
@@ -145,22 +145,20 @@ void mrl::DisplayConfigurationReport::log_configuration(
                 {
                     auto const& mode = out.modes[out.current_mode_index];
                     logger->log(component, severity,
-                                "%sCurrent mode %dx%d %.2fHz",
+                                "%sCurrent mode %dx%d",
                                 indent,
                                 mode.size.width.as_int(),
-                                mode.size.height.as_int(),
-                                mode.vrefresh_hz);
+                                mode.size.height.as_int());
                 }
 
                 if (out.preferred_mode_index < out.modes.size())
                 {
                     auto const& mode = out.modes[out.preferred_mode_index];
                     logger->log(component, severity,
-                                "%sPreferred mode %dx%d %.2fHz",
+                                "%sPreferred mode %dx%d",
                                 indent,
                                 mode.size.width.as_int(),
-                                mode.size.height.as_int(),
-                                mode.vrefresh_hz);
+                                mode.size.height.as_int());
                 }
 
                 static const char* const orientation[] =
@@ -182,11 +180,6 @@ void mrl::DisplayConfigurationReport::log_configuration(
                             indent,
                             out.top_left.x.as_int(),
                             out.top_left.y.as_int());
-
-                logger->log(component, severity,
-                            "%sScaling factor: %.2f",
-                            indent,
-                            out.scale);
             }
         }
     });
