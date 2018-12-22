@@ -68,7 +68,7 @@ std::tuple<int, int, int> get_android_version()
     if (scanf("%d.%d.%d", &std::get<0>(ret), &std::get<1>(ret), &std::get<2>(ret)) == 3)
         return ret;
     else
-        return {4, 1, 1};
+        return std::make_tuple(4, 1, 1);
 }
 #endif
 
