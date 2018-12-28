@@ -99,6 +99,7 @@ add_subdirectory(scene/)
 add_subdirectory(thread/)
 add_subdirectory(dispatch/)
 add_subdirectory(renderers/gl)
+add_subdirectory(wayland/)
 
 link_directories(${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
 
@@ -110,6 +111,14 @@ mir_add_wrapped_executable(mir_unit_tests NOINSTALL
   ${MIR_SERVER_OBJECTS}
   ${MIR_PLATFORM_OBJECTS}
 )
+
+set_property(
+  SOURCE test_udev_wrapper.cpp test_glib_main_loop.cpp
+  SOURCE console/test_logind_console_services.cpp
+  SOURCE input/test_logind_console_services.cpp input/test_input_platform_probing.cpp
+  SOURCE input/evdev/test_evdev_input_platform.cpp
+  SOURCE graphics/test_platform_prober.cpp
+  PROPERTY COMPILE_OPTIONS -Wno-variadic-macros)
 
 mir_precompiled_header(mir_unit_tests ${CMAKE_CURRENT_SOURCE_DIR}/precompiled.hpp)
 
@@ -136,6 +145,7 @@ target_link_libraries(
   ${GTEST_BOTH_LIBRARIES}
   ${GMOCK_LIBRARIES}
   ${Boost_LIBRARIES}
+  ${WAYLAND_SERVER_LDFLAGS} ${WAYLAND_SERVER_LIBRARIES}
   ${CMAKE_THREAD_LIBS_INIT} # Link in pthread.
 )
 

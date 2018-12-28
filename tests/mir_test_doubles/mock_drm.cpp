@@ -18,6 +18,7 @@
  */
 
 #include "mir/test/doubles/mock_drm.h"
+#include "mir_test_framework/open_wrapper.h"
 #include "mir/geometry/size.h"
 #include <gtest/gtest.h>
 
@@ -232,6 +233,16 @@ drmModeModeInfo mtd::FakeDRMResources::create_mode(uint16_t hdisplay, uint16_t v
 }
 
 mtd::MockDRM::MockDRM()
+    : open_interposer{mir_test_framework::add_open_handler(
+        [this](char const* path, int flags, mode_t mode) -> std::experimental::optional<int>
+        {
+            char const* const drm_prefix = "/dev/dri/";
+            if (!strncmp(path, drm_prefix, strlen(drm_prefix)))
+            {
+                return this->open(path, flags, mode);
+            }
+            return {};
+        })}
 {
     using namespace testing;
     assert(global_mock == NULL && "Only one mock object per process is allowed");
@@ -357,6 +368,18 @@ void mtd::MockDRM::generate_event_on(char const *device)
     {
         BOOST_THROW_EXCEPTION(
             std::system_error(errno, std::system_category(), "Failed to make fake DRM event"));
+    }
+}
+
+void mtd::MockDRM::consume_event_on(char const* device)
+{
+    auto const fd = fake_drms[device].fd();
+
+    char consume_buf;
+    if (::read(fd, &consume_buf, 1) != 1)
+    {
+        BOOST_THROW_EXCEPTION(
+            std::system_error(errno, std::system_category(), "Failed to consume fake DRM event"));
     }
 }
 
@@ -676,57 +699,3 @@ char* drmGetDeviceNameFromFd(int fd)
     return global_mock->drmGetDeviceNameFromFd(fd);
 }
 
-// We need to wrap open as we sometimes open() the DRM device
-// We need to explicitly mark this as C because we don't match the
-// libc header; we only care about the three-parameter version
-extern "C"
-{
-int open(char const* path, int flags, mode_t mode)
-{
-    char const* drm_prefix = "/dev/dri/";
-    if (!strncmp(path, drm_prefix, strlen(drm_prefix)))
-        return global_mock->open(path, flags, mode);
-
-    int (*real_open)(char const *path, int flags, mode_t mode);
-    *(void **)(&real_open) = dlsym(RTLD_NEXT, "open");
-
-    return (*real_open)(path, flags, mode);
-}
-
-int open64(char const* path, int flags, mode_t mode)
-{
-    char const* drm_prefix = "/dev/dri/";
-    if (!strncmp(path, drm_prefix, strlen(drm_prefix)))
-        return global_mock->open(path, flags, mode);
-
-    int (*real_open64)(char const *path, int flags, mode_t mode);
-    *(void **)(&real_open64) = dlsym(RTLD_NEXT, "open64");
-
-    return (*real_open64)(path, flags, mode);
-}
-
-int __open(char const* path, int flags, mode_t mode)
-{
-    char const* drm_prefix = "/dev/dri/";
-    if (!strncmp(path, drm_prefix, strlen(drm_prefix)))
-        return global_mock->open(path, flags, mode);
-
-    int (*real_open)(char const *path, int flags, mode_t mode);
-    *(void **)(&real_open) = dlsym(RTLD_NEXT, "__open");
-
-    return (*real_open)(path, flags, mode);
-}
-
-int __open64(char const* path, int flags, mode_t mode)
-{
-    char const* drm_prefix = "/dev/dri/";
-    if (!strncmp(path, drm_prefix, strlen(drm_prefix)))
-        return global_mock->open(path, flags, mode);
-
-    int (*real_open64)(char const *path, int flags, mode_t mode);
-    *(void **)(&real_open64) = dlsym(RTLD_NEXT, "__open64");
-
-    return (*real_open64)(path, flags, mode);
-}
-
-}

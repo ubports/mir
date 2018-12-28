@@ -8,6 +8,7 @@ add_library(example-shell-lib STATIC
     titlebar_config.cpp         titlebar_config.h
         splash_session.h
     sw_splash.cpp               sw_splash.h
+    wayland_helpers.cpp         wayland_helpers.h
 )
 
 target_include_directories(example-shell-lib
@@ -17,4 +18,4 @@ target_include_directories(example-shell-lib
     PRIVATE
         ${FREETYPE_INCLUDE_DIRS}
 )
-target_link_libraries(example-shell-lib PUBLIC miral mirclient PRIVATE ${FREETYPE_LIBRARIES})
+target_link_libraries(example-shell-lib PUBLIC miral PRIVATE ${WAYLAND_CLIENT_LIBRARIES} ${FREETYPE_LIBRARIES})

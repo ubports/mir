@@ -53,9 +53,9 @@ FloatingWindowManagerPolicy::FloatingWindowManagerPolicy(
     std::function<void()>& shutdown_hook) :
     CanonicalWindowManagerPolicy(tools),
     spinner{spinner},
-    decoration_provider{std::make_unique<DecorationProvider>(tools)}
+    decoration_provider{std::make_unique<DecorationProvider>()}
 {
-    launcher.launch("decorations", *decoration_provider);
+    launcher.launch(*decoration_provider);
     shutdown_hook = [this] { decoration_provider->stop(); };
 
     for (auto key : {KEY_F1, KEY_F2, KEY_F3, KEY_F4})
@@ -170,19 +170,6 @@ bool FloatingWindowManagerPolicy::handle_pointer_event(MirPointerEvent const* ev
                 pointer_moving = true;
                 active_pointer_modifiers = modifiers;
                 consumes_event = true;
-            }
-            else if (modifiers == 0)
-            {
-                if (auto const possible_titlebar = tools.window_at(old_cursor))
-                {
-                    auto const& info = tools.info_for(possible_titlebar);
-                    if (decoration_provider->is_titlebar(info))
-                    {
-                        pointer_moving = true;
-                        active_pointer_modifiers = modifiers;
-                        consumes_event = true;
-                    }
-                }
             }
         }
         else if (mir_pointer_event_button_state(event, mir_pointer_button_tertiary))
@@ -379,16 +366,6 @@ void FloatingWindowManagerPolicy::advise_new_window(WindowInfo const& window_inf
 
     auto const parent = window_info.parent();
 
-    if (decoration_provider->is_titlebar(window_info))
-    {
-        decoration_provider->advise_new_titlebar(window_info);
-
-        if (tools.active_window() == parent)
-            decoration_provider->paint_titlebar_for(tools.info_for(parent), 0xFF);
-        else
-            decoration_provider->paint_titlebar_for(tools.info_for(parent), 0x3F);
-    }
-
     if (!parent)
         tools.add_tree_to_workspace(window_info.window(), active_workspace);
     else
@@ -400,25 +377,13 @@ void FloatingWindowManagerPolicy::advise_new_window(WindowInfo const& window_inf
 
 void FloatingWindowManagerPolicy::handle_window_ready(WindowInfo& window_info)
 {
-    if (window_info.window().application() != spinner->session() && window_info.needs_titlebar(window_info.type()))
-        decoration_provider->create_titlebar_for(window_info.window());
-
     CanonicalWindowManagerPolicy::handle_window_ready(window_info);
     keep_spinner_on_top();
-}
-
-void FloatingWindowManagerPolicy::advise_focus_lost(WindowInfo const& info)
-{
-    CanonicalWindowManagerPolicy::advise_focus_lost(info);
-
-    decoration_provider->paint_titlebar_for(info, 0x3F);
 }
 
 void FloatingWindowManagerPolicy::advise_focus_gained(WindowInfo const& info)
 {
     CanonicalWindowManagerPolicy::advise_focus_gained(info);
-
-    decoration_provider->paint_titlebar_for(info, 0xFF);
     keep_spinner_on_top();
 }
 
@@ -432,27 +397,6 @@ void FloatingWindowManagerPolicy::keep_spinner_on_top()
         for (auto const& window : spinner_info.windows())
             tools.raise_tree(window);
     }
-}
-
-void FloatingWindowManagerPolicy::advise_state_change(WindowInfo const& window_info, MirWindowState state)
-{
-    CanonicalWindowManagerPolicy::advise_state_change(window_info, state);
-
-    decoration_provider->advise_state_change(window_info, state);
-}
-
-void FloatingWindowManagerPolicy::advise_resize(WindowInfo const& window_info, Size const& new_size)
-{
-    CanonicalWindowManagerPolicy::advise_resize(window_info, new_size);
-
-    decoration_provider->resize_titlebar_for(window_info, new_size);
-}
-
-void FloatingWindowManagerPolicy::advise_delete_window(WindowInfo const& window_info)
-{
-    CanonicalWindowManagerPolicy::advise_delete_window(window_info);
-
-    decoration_provider->destroy_titlebar_for(window_info.window());
 }
 
 bool FloatingWindowManagerPolicy::handle_keyboard_event(MirKeyboardEvent const* event)
@@ -694,13 +638,15 @@ WindowSpecification FloatingWindowManagerPolicy::place_new_window(
 {
     auto parameters = CanonicalWindowManagerPolicy::place_new_window(app_info, request_parameters);
 
+    if (app_info.application() == decoration_provider->session())
+    {
+        parameters.type() = mir_window_type_decoration;
+    }
+
     bool const needs_titlebar = WindowInfo::needs_titlebar(parameters.type().value());
 
     if (parameters.state().value() != mir_window_state_fullscreen && needs_titlebar)
         parameters.top_left() = Point{parameters.top_left().value().x, parameters.top_left().value().y + title_bar_height};
-
-    if (app_info.application() == decoration_provider->session())
-        decoration_provider->place_new_decoration(parameters);
 
     parameters.userdata() = std::make_shared<PolicyData>();
     return parameters;

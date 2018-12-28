@@ -67,12 +67,15 @@ add_library(mirserverobjects OBJECT
   ${PROJECT_SOURCE_DIR}/include/server/mir/time/alarm_factory.h
   ${PROJECT_SOURCE_DIR}/include/server/mir/time/alarm.h
   ${PROJECT_SOURCE_DIR}/include/server/mir/observer_registrar.h
-  ${PROJECT_SOURCE_DIR}/include/server/mir/executor.h
   ${PROJECT_SOURCE_DIR}/src/include/server/mir/observer_multiplexer.h
   ${PROJECT_SOURCE_DIR}/src/include/server/mir/glib_main_loop.h
   ${PROJECT_SOURCE_DIR}/src/include/server/mir/glib_main_loop_sources.h
   ${PROJECT_SOURCE_DIR}/src/include/server/mir/synchronised.h
 )
+
+set_property(
+    SOURCE glib_main_loop.cpp glib_main_loop_sources.cpp default_server_configuration.cpp
+    PROPERTY COMPILE_OPTIONS -Wno-variadic-macros)
 
 set(MIR_SERVER_OBJECTS
   $<TARGET_OBJECTS:mirserverobjects>
@@ -101,6 +104,7 @@ set(MIR_SERVER_OBJECTS
 set(MIR_SERVER_REFERENCES
   ${EGL_LDFLAGS} ${EGL_LIBRARIES}
   ${GL_LDFLAGS} ${GL_LIBRARIES}
+  ${EPOXY_LDFLAGS} ${EPOXY_LIBRARIES}
   ${UDEV_LDFLAGS} ${UDEV_LIBRARIES}
   ${GLIB_LDFLAGS} ${GLIB_LIBRARIES}
   ${GIO_LDFLAGS} ${GIO_LIBRARIES}
@@ -127,6 +131,7 @@ target_link_libraries(mirserver LINK_PUBLIC
   ${GFlags_LIBRARY}
   ${EGL_LDFLAGS} ${EGL_LIBRARIES}
   ${GL_LDFLAGS} ${GL_LIBRARIES}
+  ${EPOXY_LDFLAGS} ${EPOXY_LIBRARIES}
   ${UDEV_LDFLAGS} ${UDEV_LIBRARIES}
   ${GLIB_LDFLAGS} ${GLIB_LIBRARIES}
   ${GIO_LDFLAGS} ${GIO_LIBRARIES}

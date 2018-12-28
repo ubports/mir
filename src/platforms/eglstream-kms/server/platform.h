@@ -47,7 +47,8 @@ namespace eglstream
 class RenderingPlatform : public graphics::RenderingPlatform
 {
 public:
-    UniqueModulePtr<GraphicBufferAllocator> create_buffer_allocator() override;
+    UniqueModulePtr<GraphicBufferAllocator>
+        create_buffer_allocator(Display const& output) override;
     UniqueModulePtr<PlatformIpcOperations> make_ipc_operations() const override;
     NativeRenderingPlatform* native_rendering_platform() override;
 };
@@ -55,7 +56,10 @@ public:
 class DisplayPlatform : public graphics::DisplayPlatform
 {
 public:
-    DisplayPlatform(ConsoleServices& console, EGLDeviceEXT device);
+    DisplayPlatform(
+        ConsoleServices& console,
+        EGLDeviceEXT device,
+        std::shared_ptr<DisplayReport> display_report);
 
     UniqueModulePtr<Display> create_display(
         std::shared_ptr<DisplayConfigurationPolicy> const& /*initial_conf_policy*/,
@@ -64,6 +68,7 @@ public:
     std::vector<ExtensionDescription> extensions() const override;
 
 private:
+    std::shared_ptr<DisplayReport> const display_report;
     EGLDisplay display;
     mir::Fd drm_node;
     std::unique_ptr<mir::Device> drm_device;
@@ -77,7 +82,8 @@ public:
         std::shared_ptr<DisplayPlatform> const&);
     ~Platform() = default;
 
-    UniqueModulePtr<GraphicBufferAllocator> create_buffer_allocator() override;
+    UniqueModulePtr<GraphicBufferAllocator>
+        create_buffer_allocator(Display const& output) override;
 
     UniqueModulePtr<Display> create_display(
         std::shared_ptr<DisplayConfigurationPolicy> const& /*initial_conf_policy*/,
