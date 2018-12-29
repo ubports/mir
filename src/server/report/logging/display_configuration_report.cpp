@@ -61,7 +61,7 @@ void mrl::DisplayConfigurationReport::log_configuration(mg::DisplayConfiguration
         static const char* const type_str[] =
             {"Unknown", "VGA", "DVI-I", "DVI-D", "DVI-A", "Composite",
              "S-Video", "LVDS", "Component", "9-pin-DIN", "DisplayPort",
-             "HDMI-A", "HDMI-B", "TV", "eDP"};
+             "HDMI-A", "HDMI-B", "TV", "eDP", "Virtual"};
         auto type = type_str[static_cast<int>(out.type)];
         int out_id = out.id.as_value();
         int card_id = out.card_id.as_value();

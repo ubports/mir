@@ -184,3 +184,28 @@ Information".
  - The logcat from /system/bin/logcat at the time of the problem
  - The kernel log from dmesg at the time of the problem.
  - A video of any visual glitches or corruption
+
+Selecting the right ABI
+-----------------
+
+During the development of android 7, qualcomm made changes to the android
+hardware level APIs. They added support for a secondary builtin display, and 
+made other changes. This affected the existing ABI of the hardware compositor
+module (HWC). Since this change affected the values passed between the parts of
+the platform in a sublte way, the platform is now configured at build time,
+resulting in two platform modules.
+
+Thus the android platform of mir needs to identify the type of HWC module at
+load time. The check for the HWC ABI happens with the help of android properties
+and the vendor name of the HWC module. The following properties are checked:
+ - ro.build.version.release
+ - ro.build.vanilla.abi
+ - ro.build.qti_bsp.abi
+
+The changed ABI version of the platform is named after the project CodeAurora
+Forum (CAF). It will be selected when the hwc vendor name is 'CodeAurora Form'
+and the android version is newer than 7. When 'ro.build.vanilla.abi' is set, an
+unchanged ABI is assumed, while 'ro.build.qti_bsp.abi' does the opposite.
+
+
+

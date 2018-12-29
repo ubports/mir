@@ -16,3 +16,6 @@ add_library(
   egl_sync_extensions.cpp
   native_window_report.cpp
 )
+
+target_include_directories(mirsharedandroid-static SYSTEM PRIVATE
+  ${LIBHARDWARE_INCLUDE_DIRS})

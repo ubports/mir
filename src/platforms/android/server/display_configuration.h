@@ -41,6 +41,17 @@ public:
                          DisplayConfigurationOutput external,
                          MirPowerMode external_mode,
                          DisplayConfigurationOutput virt_config);
+#ifdef ANDROID_CAF
+    DisplayConfiguration(DisplayConfigurationOutput primary,
+                         MirPowerMode primary_mode,
+                         DisplayConfigurationOutput external,
+                         MirPowerMode external_mode,
+                         DisplayConfigurationOutput tertiary,
+                         MirPowerMode tertiary_mode,
+                         DisplayConfigurationOutput virt_config);
+#endif
+
+
 
     DisplayConfiguration(DisplayConfiguration const& other);
     DisplayConfiguration& operator=(DisplayConfiguration const& other);
@@ -54,6 +65,9 @@ public:
 
     DisplayConfigurationOutput& primary();
     DisplayConfigurationOutput& external();
+#ifdef ANDROID_CAF
+    DisplayConfigurationOutput& tertiary();
+#endif
     DisplayConfigurationOutput& virt();
     DisplayConfigurationOutput& operator[](DisplayConfigurationOutputId const&);
 
@@ -61,7 +75,11 @@ public:
     void disable_virtual_output();
 
 private:
+#ifdef ANDROID_CAF
+    std::array<DisplayConfigurationOutput, 4> configurations;
+#else
     std::array<DisplayConfigurationOutput, 3> configurations;
+#endif
     DisplayConfigurationCard card;
 };
 

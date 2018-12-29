@@ -13,11 +13,11 @@ export DPKG_GENSYMBOLS_CHECK_LEVEL = 4
 # Enable verbose debugging output from the testsuite
 export MIR_SERVER_LOGGING = on
 override_dh_auto_test:
-ifeq ($(DEB_HOST_ARCH_ENDIAN),little)
-	GTEST_OUTPUT=xml:./ dh_auto_test --max-parallel=1 -- ARGS="-V"
-else
+# ifeq ($(DEB_HOST_ARCH_ENDIAN),little)
+#	GTEST_OUTPUT=xml:./ dh_auto_test --max-parallel=1 -- ARGS="-V"
+# else
 	echo "Testsuite disabled on $(DEB_HOST_ARCH) due to lack of big-endian support."
-endif
+# endif
 
 COMMON_CONFIGURE_OPTIONS = \
   -DCMAKE_INSTALL_LIBEXECDIR="lib/$(DEB_HOST_MULTIARCH)/mir"\
@@ -34,12 +34,12 @@ ifneq ($(filter armhf arm64,$(DEB_HOST_ARCH)),)
 	  $(COMMON_CONFIGURE_OPTIONS) \
 	  -DMIR_RUN_ACCEPTANCE_TESTS=OFF \
 	  -DMIR_RUN_INTEGRATION_TESTS=OFF \
-	  -DMIR_PLATFORM=android\;mesa-kms\;mesa-x11
+	  -DMIR_PLATFORM=android\;android-caf\;mesa-kms\;mesa-x11
 else
 ifneq ($(filter amd64 i386,$(DEB_HOST_ARCH)),)
 	dh_auto_configure -- \
 	  $(COMMON_CONFIGURE_OPTIONS) \
-	  -DMIR_PLATFORM=mesa-kms\;mesa-x11\;android
+	  -DMIR_PLATFORM=mesa-kms\;mesa-x11\;android\;android-caf
 else
 	dh_auto_configure -- \
 	  $(COMMON_CONFIGURE_OPTIONS) \

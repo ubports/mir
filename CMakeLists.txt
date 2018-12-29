@@ -166,10 +166,10 @@ add_definitions(-DMESA_EGL_NO_X11_HEADERS)
 # Default to KMS backend, but build all of them
 set(
   MIR_PLATFORM
-  mesa-kms;android;mesa-x11;eglstream-kms
+  mesa-kms;android;android-caf;mesa-x11;eglstream-kms
   CACHE
   STRING
-  "a list of graphics backends to build (options are 'mesa-kms', 'android', 'mesa-x11', or 'eglstream-kms')"
+  "a list of graphics backends to build (options are 'mesa-kms', 'android', 'android-caf', 'mesa-x11', or 'eglstream-kms')"
 )
 
 list(GET MIR_PLATFORM 0 MIR_TEST_PLATFORM)
@@ -182,6 +182,9 @@ foreach(platform IN LISTS MIR_PLATFORM)
   endif()
   if (platform STREQUAL "android")
      set(MIR_BUILD_PLATFORM_ANDROID TRUE)
+  endif()
+  if (platform STREQUAL "android-caf")
+     set(MIR_BUILD_PLATFORM_ANDROID_CAF TRUE)
   endif()
   if (platform STREQUAL "mesa-x11")
      set(MIR_BUILD_PLATFORM_MESA_X11 TRUE)
@@ -240,9 +243,14 @@ else()
   message(FATAL_ERROR "Invalid MIR_SERVER_LIBGL value ${MIR_SERVER_LIBGL}")
 endif()
 
-if (MIR_BUILD_PLATFORM_ANDROID)
+if (MIR_BUILD_PLATFORM_ANDROID OR MIR_BUILD_PLATFORM_ANDROID_CAF)
   find_package(AndroidProperties REQUIRED)
   find_package(LibHardware REQUIRED)
+endif()
+
+if (MIR_BUILD_PLATFORM_ANDROID_CAF)
+  find_package(PkgConfig)
+  pkg_search_module(ANDROID_CAF_HEADERS REQUIRED android-headers-24-caf)
 endif()
 
 if (MIR_BUILD_PLATFORM_MESA_KMS OR MIR_BUILD_PLATFORM_MESA_X11)
