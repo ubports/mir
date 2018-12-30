@@ -1,5 +1,8 @@
 # get a gtest version string the regex will match
-if (DEFINED ENV{GTEST_VERSION})
+if (GTEST_FOUND AND GTEST_MAIN_FOUND)
+  set(GTEST_VERSION_STR ${GTEST_VERSION})
+  set(GTEST_DETECTION_METHOD "pkg-config")
+elseif (DEFINED ENV{GTEST_VERSION})
   set(GTEST_VERSION_STR $ENV{GTEST_VERSION})
   set(GTEST_DETECTION_METHOD "GTEST_VERSION environment variable")
 else()
@@ -18,7 +21,7 @@ else()
     set(GTEST_DETECTION_METHOD "output of apt")
   elseif(RPM_EXECUTABLE)
     EXEC_PROGRAM(${RPM_EXECUTABLE} "/"
-      ARGS "-q" "libgtest-dev"
+      ARGS "-q" "gtest-devel"
       OUTPUT_VARIABLE GTEST_VERSION_STR)
     set(GTEST_DETECTION_METHOD "output of rpm")
   elseif(PACMAN_EXECUTABLE)

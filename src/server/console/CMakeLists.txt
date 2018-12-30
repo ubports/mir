@@ -5,7 +5,7 @@ add_library(
 
   linux_virtual_terminal.cpp                linux_virtual_terminal.h
   logind_console_services.cpp               logind_console_services.h
-  null_console_services.h
+  minimal_console_services.h                minimal_console_services.cpp
   logind-seat.c                             logind-seat.h
   logind-session.c                          logind-session.h
   default_configuration.cpp
@@ -22,6 +22,10 @@ set_source_files_properties(
   COMPILE_FLAGS
     "${CMAKE_C_FLAGS} -Wno-unused-parameter -Wno-unused-function"
 )
+
+set_property(
+    SOURCE logind_console_services.cpp default_configuration.cpp
+    PROPERTY COMPILE_OPTIONS -Wno-variadic-macros)
 
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/logind-seat.h

@@ -535,15 +535,27 @@ void miral::BasicWindowManager::focus_next_application()
             }
             while (focus_controller->focused_session() != prev.application());
         }
+        else
+        {
+            do
+            {
+                focus_controller->focus_next_session();
 
+                if (can_activate_window_for_session(focus_controller->focused_session()))
+                    return;
+            }
+            while (focus_controller->focused_session() != prev.application());
+        }
+    }
+    else
+    {
+        focus_controller->focus_next_session();
+
+        if (can_activate_window_for_session(focus_controller->focused_session()))
+            return;
     }
 
-    focus_controller->focus_next_session();
-
-    if (can_activate_window_for_session(focus_controller->focused_session()))
-        return;
-
-    // Last resort: accept wherever focus_controller placed focus
+    // Last resort: accept wherever focus_controller places focus
     auto const focussed_surface = focus_controller->focused_surface();
     select_active_window(focussed_surface ? info_for(focussed_surface).window() : Window{});
 }
@@ -1325,6 +1337,7 @@ void miral::BasicWindowManager::drag_window(miral::Window const& window, Displac
     case mir_window_type_menu:
     case mir_window_type_inputmethod:
     case mir_window_type_tip:
+    case mir_window_type_decoration:
     case mir_window_types:
         return;
     }
@@ -1892,6 +1905,7 @@ void miral::BasicWindowManager::validate_modification_request(WindowSpecificatio
         case mir_window_type_freestyle:
         case mir_window_type_inputmethod:
         case mir_window_type_tip:
+        case mir_window_type_decoration:
             if (target_type != original_type)
                 BOOST_THROW_EXCEPTION(std::runtime_error("Invalid surface type change"));
             break;
@@ -1920,6 +1934,7 @@ void miral::BasicWindowManager::validate_modification_request(WindowSpecificatio
     case mir_window_type_dialog:
     case mir_window_type_menu:
     case mir_window_type_freestyle:
+    case mir_window_type_decoration:
         break;
 
     default:

@@ -43,8 +43,12 @@ namespace mg = mir::graphics;
 namespace mge = mir::graphics::eglstream;
 namespace mgc = mir::graphics::common;
 
-mge::DisplayPlatform::DisplayPlatform(ConsoleServices& console, EGLDeviceEXT device)
-    : display{EGL_NO_DISPLAY}
+mge::DisplayPlatform::DisplayPlatform(
+    ConsoleServices& console,
+    EGLDeviceEXT device,
+    std::shared_ptr<mg::DisplayReport> display_report)
+    : display_report{std::move(display_report)},
+      display{EGL_NO_DISPLAY}
 {
     using namespace std::literals;
 
@@ -91,7 +95,14 @@ mir::UniqueModulePtr<mg::Display> mge::DisplayPlatform::create_display(
     std::shared_ptr<DisplayConfigurationPolicy> const& configuration_policy,
     std::shared_ptr<GLConfig> const& gl_config)
 {
-    return mir::make_module_ptr<mge::Display>(drm_node, display, configuration_policy, *gl_config);
+    auto retval =
+        mir::make_module_ptr<mge::Display>(
+            drm_node,
+            display,
+            configuration_policy,
+            *gl_config,
+            display_report);
+    return retval;
 }
 
 mg::NativeDisplayPlatform* mge::DisplayPlatform::native_display_platform()
@@ -107,9 +118,10 @@ std::vector<mir::ExtensionDescription> mge::DisplayPlatform::extensions() const
     };
 }
 
-mir::UniqueModulePtr<mg::GraphicBufferAllocator> mge::RenderingPlatform::create_buffer_allocator()
+mir::UniqueModulePtr<mg::GraphicBufferAllocator> mge::RenderingPlatform::create_buffer_allocator(
+    mg::Display const& output)
 {
-    return mir::make_module_ptr<mge::BufferAllocator>();
+    return mir::make_module_ptr<mge::BufferAllocator>(output);
 }
 
 mg::NativeRenderingPlatform* mge::RenderingPlatform::native_rendering_platform()
@@ -172,9 +184,10 @@ mge::Platform::Platform(
 {
 }
 
-mir::UniqueModulePtr<mg::GraphicBufferAllocator> mge::Platform::create_buffer_allocator()
+mir::UniqueModulePtr<mg::GraphicBufferAllocator>
+    mge::Platform::create_buffer_allocator(mg::Display const& output)
 {
-    return rendering->create_buffer_allocator();
+    return rendering->create_buffer_allocator(output);
 }
 
 mir::UniqueModulePtr<mg::PlatformIpcOperations> mge::Platform::make_ipc_operations() const

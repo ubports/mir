@@ -507,7 +507,7 @@ void cleanup_display(wl_display *display)
 class ThrowingAllocator : public mg::WaylandAllocator
 {
 public:
-    void bind_display(wl_display*) override
+    void bind_display(wl_display*, std::shared_ptr<mir::Executor>) override
     {
     }
 
@@ -522,13 +522,14 @@ public:
 
 std::shared_ptr<mg::WaylandAllocator> allocator_for_display(
     std::shared_ptr<mg::GraphicBufferAllocator> const& buffer_allocator,
-    wl_display* display)
+    wl_display* display,
+    std::shared_ptr<mir::Executor> executor)
 {
     if (auto allocator = std::dynamic_pointer_cast<mg::WaylandAllocator>(buffer_allocator))
     {
         try
         {
-            allocator->bind_display(display);
+            allocator->bind_display(display, std::move(executor));
             return allocator;
         }
         catch (...)
@@ -593,7 +594,8 @@ mf::WaylandConnector::WaylandConnector(
     std::unique_ptr<WaylandExtensions> extensions_)
     : display{wl_display_create(), &cleanup_display},
       pause_signal{eventfd(0, EFD_CLOEXEC | EFD_SEMAPHORE)},
-      allocator{allocator_for_display(allocator, display.get())},
+      executor{std::make_shared<WaylandExecutor>(wl_display_get_event_loop(display.get()))},
+      allocator{allocator_for_display(allocator, display.get(), executor)},
       extensions{std::move(extensions_)}
 {
     if (pause_signal == mir::Fd::invalid)
@@ -618,8 +620,6 @@ mf::WaylandConnector::WaylandConnector(
      * So far I've only found ones which expect wl_compositor before anything else,
      * so stick that first.
      */
-    auto const executor = executor_for_event_loop(wl_display_get_event_loop(display.get()));
-
     compositor_global = std::make_unique<mf::WlCompositor>(
         display.get(),
         executor,
@@ -722,8 +722,7 @@ int mf::WaylandConnector::client_socket_fd() const
     else
     {
         // TODO: Wait on the result of wl_client_create so we can throw an exception on failure.
-        executor_for_event_loop(wl_display_get_event_loop(display.get()))
-            ->spawn(
+        executor->spawn(
                 [socket = socket_fd[server], display = display.get()]()
                 {
                     if (!wl_client_create(display, socket))
@@ -756,8 +755,7 @@ int mf::WaylandConnector::client_socket_fd(
     }
     else
     {
-        executor_for_event_loop(wl_display_get_event_loop(display.get()))
-            ->spawn(
+        executor->spawn(
                 [socket = socket_fd[server], display = display.get(), this, connect_handler]()
                     {
                         connect_handlers[socket] = std::move(connect_handler);
@@ -780,8 +778,6 @@ int mf::WaylandConnector::client_socket_fd(
 
 void mf::WaylandConnector::run_on_wayland_display(std::function<void(wl_display*)> const& functor)
 {
-    auto executor = executor_for_event_loop(wl_display_get_event_loop(display.get()));
-
     executor->spawn([display_ref = display.get(), functor]() { functor(display_ref); });
 }
 

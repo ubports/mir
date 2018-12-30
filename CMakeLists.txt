@@ -28,7 +28,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 set(MIR_VERSION_MAJOR 1)
-set(MIR_VERSION_MINOR 0)
+set(MIR_VERSION_MINOR 1)
 set(MIR_VERSION_PATCH 0)
 
 add_definitions(-DMIR_VERSION_MAJOR=${MIR_VERSION_MAJOR})
@@ -60,6 +60,11 @@ set(build_types "None;Debug;Release;RelWithDebInfo;MinSizeRel;Coverage;AddressSa
 set(CMAKE_BUILD_TYPE ${CMAKE_BUILD_TYPE} CACHE STRING "${build_types}" FORCE)
 # Enable cmake-gui to display a drop down list for CMAKE_BUILD_TYPE
 set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "${build_types}")
+
+# Standard must be set both this way and in the flags below, to cover all cmake versions
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pthread -g -Werror -Wall -pedantic -Wextra -fPIC")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -g -std=c++14 -Werror -Wall -fno-strict-aliasing -pedantic -Wnon-virtual-dtor -Wextra -fPIC")
@@ -179,6 +184,7 @@ endif()
 add_definitions(-DLOG_NDEBUG=1)
 
 enable_testing()
+find_package(PkgConfig)
 
 include_directories(include/core)
 include_directories(include/common)
@@ -203,14 +209,26 @@ endif(MIR_DISABLE_EPOLL_REACTOR)
 
 add_definitions(-DMESA_EGL_NO_X11_HEADERS)
 
-# Default to KMS backend, but build all of them
-set(
-  MIR_PLATFORM
-  mesa-kms;mesa-x11;eglstream-kms
-  CACHE
-  STRING
-  "a list of graphics backends to build (options are 'mesa-kms', 'mesa-x11', or 'eglstream-kms')"
-)
+pkg_check_modules(WAYLAND_EGLSTREAM wayland-eglstream)
+
+# Set the default platforms based on availability of NVIDIA libraries
+if (WAYLAND_EGLSTREAM_FOUND)
+  set(
+    MIR_PLATFORM
+    mesa-kms;mesa-x11;eglstream-kms
+    CACHE
+    STRING
+    "a list of graphics backends to build (options are 'mesa-kms', 'mesa-x11', or 'eglstream-kms')"
+  )
+else()
+  set(
+    MIR_PLATFORM
+    mesa-kms;mesa-x11
+    CACHE
+    STRING
+    "a list of graphics backends to build (options are 'mesa-kms', 'mesa-x11', or 'eglstream-kms')"
+  )
+endif()
 
 list(GET MIR_PLATFORM 0 MIR_TEST_PLATFORM)
 
@@ -224,6 +242,9 @@ foreach(platform IN LISTS MIR_PLATFORM)
      set(MIR_BUILD_PLATFORM_MESA_X11 TRUE)
   endif()
   if (platform STREQUAL "eglstream-kms")
+     if (NOT WAYLAND_EGLSTREAM_FOUND)
+        message(FATAL_ERROR "EGLStream platform requested, but required NVIDIA external EGL platform nvidia-egl-wayland not found")
+     endif()
      set(MIR_BUILD_PLATFORM_EGLSTREAM_KMS TRUE)
   endif()
 endforeach(platform)
@@ -290,7 +311,6 @@ else()
 endif()
 
 if (MIR_BUILD_PLATFORM_MESA_KMS OR MIR_BUILD_PLATFORM_MESA_X11)
-  find_package( PkgConfig )
   pkg_check_modules( GBM REQUIRED gbm>=9.0.0)
   pkg_check_modules( DRM REQUIRED libdrm )
   if (GBM_VERSION VERSION_LESS 11)

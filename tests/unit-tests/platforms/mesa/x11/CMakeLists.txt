@@ -9,15 +9,19 @@ mir_add_wrapped_executable(mir_unit_tests_mesa-x11 NOINSTALL
   $<TARGET_OBJECTS:mirnullreport>  # Sub-optimal. We really want to link a lib
 )
 
+set_property(
+  SOURCE test_platform.cpp test_graphics_platform.cpp test_display_generic.cpp
+  PROPERTY COMPILE_OPTIONS -Wno-variadic-macros)
+
 add_dependencies(mir_unit_tests_mesa-x11 GMock)
 
 target_link_libraries(
   mir_unit_tests_mesa-x11
 
   mir-test-static
-  mir-test-framework-static
   mir-test-doubles-static
   mir-test-doubles-platform-static
+  mir-test-framework-static
   mirsharedmesaservercommon-static
   server_platform_common
 )
