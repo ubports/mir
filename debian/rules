@@ -42,11 +42,11 @@ endif
 
 $(info COMMON_CONFIGURE_OPTIONS: ${COMMON_CONFIGURE_OPTIONS})
 
-ifneq ($(filter amd64 i386,$(DEB_HOST_ARCH)),)
-  AVAILABLE_PLATFORMS=mesa-kms\;mesa-x11\;eglstream-kms
-else
+#ifneq ($(filter amd64 i386,$(DEB_HOST_ARCH)),)
+#  AVAILABLE_PLATFORMS=mesa-kms\;mesa-x11\;eglstream-kms
+#else
 	AVAILABLE_PLATFORMS=mesa-kms\;mesa-x11
-endif
+#endif
 
 override_dh_auto_configure:
 ifneq ($(filter armhf,$(DEB_HOST_ARCH)),)
