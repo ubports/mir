@@ -59,6 +59,7 @@ public:
 
 private:
     std::unique_ptr<CommandStreamSyncFactory> create_command_stream_sync_factory();
+    void start_fake_surfaceflinger();
 
     std::shared_ptr<DisplayResourceFactory> const res_factory;
     std::shared_ptr<HwcReport> const hwc_report;

@@ -15,7 +15,12 @@ find_library(LIBHARDWARE_LIBRARY
                  libhardware.so
 )
 
-set(LIBHARDWARE_LIBRARIES ${LIBHARDWARE_LIBRARY})
+find_library(LIBHYBRIS_COMMON_LIBRARY
+   NAMES         libhybris-common.so.1
+                 libhybris-common.so
+)
+
+set(LIBHARDWARE_LIBRARIES ${LIBHARDWARE_LIBRARY} ${LIBHYBRIS_COMMON_LIBRARY})
 
 # handle the QUIETLY and REQUIRED arguments and set LIBHARDWARE_FOUND to TRUE
 # if all listed variables are TRUE

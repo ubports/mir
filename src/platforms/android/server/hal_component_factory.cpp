@@ -33,7 +33,11 @@
 #include "cmdstream_sync_factory.h"
 
 #include <boost/throw_exception.hpp>
+#include <dlfcn.h>
 #include <stdexcept>
+
+#define MIR_LOG_COMPONENT "android/server"
+#include "mir/log.h"
 
 namespace mg = mir::graphics;
 namespace mga = mir::graphics::android;
@@ -66,6 +70,7 @@ mga::HalComponentFactory::HalComponentFactory(
         num_framebuffers = std::max(2u, static_cast<unsigned int>(fb_native->numFramebuffers));
     }
 
+    start_fake_surfaceflinger();
     command_stream_sync_factory = create_command_stream_sync_factory();
     buffer_allocator = std::make_shared<mga::GraphicBufferAllocator>(
         command_stream_sync_factory, quirks);
@@ -170,4 +175,33 @@ std::unique_ptr<mga::HwcConfiguration> mga::HalComponentFactory::create_hwc_conf
 std::shared_ptr<mg::GraphicBufferAllocator> mga::HalComponentFactory::the_buffer_allocator()
 {
     return buffer_allocator;
+}
+
+extern "C" void *android_dlopen(const char *filename, int flags);
+extern "C" void *android_dlsym(void *handle, const char *symbol);
+
+void mga::HalComponentFactory::start_fake_surfaceflinger()
+{
+    // Adapted from mer-hybris/qt5-qpa-hwcomposer plugin
+    void *libminisf;
+    void (*startMiniSurfaceFlinger)(void) = NULL;
+
+    // A reason for calling this method here is to initialize the binder
+    // thread pool such that services started from for example the
+    // hwcomposer plugin don't get stuck.
+    // Another is to have the SurfaceFlinger service in the same process
+    // as hwcomposer, on some devices this could improve performance.
+
+    libminisf = android_dlopen("libminisf.so", RTLD_LAZY);
+
+    if (libminisf) {
+        startMiniSurfaceFlinger = (void(*)(void))android_dlsym(libminisf, "startMiniSurfaceFlinger");
+    }
+
+    if (startMiniSurfaceFlinger) {
+        startMiniSurfaceFlinger();
+        mir::log_info("Started fake SurfaceFlinger service");
+    } else {
+        mir::log_info("Device does not have libminisf or it is incompatible, not starting fake SurfaceFlinger service");
+    }
 }
