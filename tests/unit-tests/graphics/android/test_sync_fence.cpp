@@ -19,7 +19,7 @@
 #include "sync_fence.h"
 #include "mir/test/doubles/mock_fence.h"
 
-#include <android/linux/sync.h>
+#include <linux/sync.h>
 #include <sys/ioctl.h>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
