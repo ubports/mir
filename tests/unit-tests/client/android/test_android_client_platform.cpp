@@ -21,7 +21,7 @@
 #include "mir/test/doubles/mock_egl_native_surface.h"
 #include "mir/test/doubles/mock_egl.h"
 #include "mir_test_framework/client_platform_factory.h"
-#include <android/system/graphics.h>
+#include <system/graphics.h>
 #include <EGL/egl.h>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
