@@ -74,7 +74,7 @@ std::tuple<int, int, int> get_android_version()
     ::property_get(key, value, "4.1.1");
 
     std::tuple<int, int, int> ret{0, 0, 0};
-    if (scanf("%d.%d.%d", &std::get<0>(ret), &std::get<1>(ret), &std::get<2>(ret)) == 3)
+    if (sscanf(value, "%d.%d.%d", &std::get<0>(ret), &std::get<1>(ret), &std::get<2>(ret)) == 3)
         return ret;
     else
         return std::make_tuple(4, 1, 1);
