@@ -116,21 +116,24 @@ void me::TestClientRunner::operator()(mir::Server& server)
         {
             self->test_failed = true;
 
-            auto const client_fd = server.open_client_socket();
-
             auto const pid = fork();
 
             if (pid == 0)
             {
-                char connect_string[64] = {0};
-                // We can't have both the server and the client owning the same fd, since
-                // that will result in a double-close(). We give the client a duplicate which
-                // the client can safely own (and should close when done).
-                sprintf(connect_string, "fd://%d", dup(client_fd));
+                // Enable tests with toolkits supporting mirclient
+                auto const mir_socket = server.mir_socket_name().value();
+                setenv("MIR_SOCKET", mir_socket.c_str(), 1);
 
-                setenv("MIR_SOCKET", connect_string, 1);
+                // Enable tests with toolkits supporting Wayland
+                auto const wayland_display = server.wayland_display();
+                setenv("WAYLAND_DISPLAY", wayland_display.value().c_str(),  true);   // configure Wayland socket
+                setenv("GDK_BACKEND", "wayland", true);             // configure GTK to use Wayland
+                setenv("QT_QPA_PLATFORM", "wayland", true);         // configure Qt to use Wayland
+                unsetenv("QT_QPA_PLATFORMTHEME");                   // Discourage Qt from unsupported theme
+                setenv("SDL_VIDEODRIVER", "wayland", true);         // configure SDL to use Wayland
 
                 auto const client = options1->get<std::string>(test_client_opt);
+                log(logging::Severity::informational, "mir::examples", "Starting test client: %s", client.c_str());
                 execlp(client.c_str(), client.c_str(), static_cast<char const*>(nullptr));
                 // If execl() returns then something is badly wrong
                 log(logging::Severity::critical, "mir::examples",

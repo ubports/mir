@@ -69,6 +69,7 @@ public:
                                        uint32_t clock, uint16_t htotal, uint16_t vtotal,
                                        ModePreference preferred);
 
+    bool drm_setversion_called{false};
 private:
     int pipe_fds[2];
 
@@ -150,6 +151,7 @@ public:
     MOCK_METHOD1(drmGetBusid, char* (int fd));
     MOCK_METHOD1(drmFreeBusid, void (const char*));
     MOCK_METHOD1(drmGetDeviceNameFromFd, char*(int fd));
+    MOCK_METHOD1(drmGetPrimaryDeviceNameFromFd, char*(int fd));
 
     MOCK_METHOD6(drmModeCrtcGetGamma, int(int fd, uint32_t crtc_id, uint32_t size,
                                           uint16_t* red, uint16_t* green, uint16_t* blue));
@@ -159,6 +161,7 @@ public:
     MOCK_METHOD1(drmGetVersion, drmVersionPtr(int));
     MOCK_METHOD1(drmFreeVersion, void(drmVersionPtr));
 
+    MOCK_METHOD1(drmCheckModesettingSupported, int(char const*));
 
     void add_crtc(
         char const* device,

@@ -125,11 +125,17 @@ mg::PlatformPriority probe_graphics_platform(
         mir::log_info("Unsupported: EGL platform does not support client extensions.");
         return mg::PlatformPriority::unsupported;
     }
-    if (strstr(client_extensions, "EGL_MESA_platform_gbm") == nullptr)
+    if (strstr(client_extensions, "EGL_KHR_platform_gbm") == nullptr)
     {
-        // No platform_gbm support, so we can't work.
-        mir::log_info("Unsupported: EGL platform does not support EGL_MESA_platform_gbm extension");
-        return mg::PlatformPriority::unsupported;
+        // Doesn't support the Khronos-standardised GBM platform…
+        mir::log_info("EGL platform does not support EGL_KHR_platform_gbm extension");
+        // …maybe we support the old pre-standardised Mesa GBM platform?
+        if (strstr(client_extensions, "EGL_MESA_platform_gbm") == nullptr)
+        {
+            mir::log_info(
+                "Unsupported: EGL platform supports neither EGL_KHR_platform_gbm nor EGL_MESA_platform_gbm");
+            return mg::PlatformPriority::unsupported;
+        }
     }
 
     // Check for suitability
@@ -149,6 +155,8 @@ mg::PlatformPriority probe_graphics_platform(
 
         try
         {
+            auto maximum_suitability = mg::PlatformPriority::best;
+
             // Rely on the console handing us a DRM master...
             auto const device_cleanup = console->acquire_device(
                 major(devnum), minor(devnum),
@@ -156,6 +164,67 @@ mg::PlatformPriority probe_graphics_platform(
 
             if (tmp_fd != mir::Fd::invalid)
             {
+                // Check that the drm device is usable by setting the interface version we use (1.4)
+                drmSetVersion sv;
+                sv.drm_di_major = 1;
+                sv.drm_di_minor = 4;
+                sv.drm_dd_major = -1;     /* Don't care */
+                sv.drm_dd_minor = -1;     /* Don't care */
+
+                if (auto error = -drmSetInterfaceVersion(tmp_fd, &sv))
+                {
+                    throw std::system_error{
+                        error,
+                        std::system_category(),
+                        std::string{"Failed to set DRM interface version on device "} + device.devnode()};
+                }
+
+                /* Check if modesetting is supported on this DRM node
+                 * This must be done after drmSetInterfaceVersion() as, for Hysterical Raisins,
+                 * drmGetBusid() will return nullptr unless drmSetInterfaceVersion() has already been called
+                 */
+                auto const busid = std::unique_ptr<char, decltype(&drmFreeBusid)>{
+                    drmGetBusid(tmp_fd),
+                    &drmFreeBusid
+                };
+
+                if (!busid)
+                {
+                    mir::log_warning(
+                        "Failed to query BusID for device %s; cannot check if KMS is available",
+                        device.devnode());
+                    maximum_suitability = mg::PlatformPriority::supported;
+                }
+                else
+                {
+                    switch (auto err = -drmCheckModesettingSupported(busid.get()))
+                    {
+                    case 0: break;
+
+                    case ENOSYS:
+                        if (getenv("MIR_MESA_KMS_DISABLE_MODESET_PROBE") == nullptr)
+                        {
+                            throw std::runtime_error{std::string{"Device "}+device.devnode()+" does not support KMS"};
+                        }
+
+                        mir::log_debug("MIR_MESA_KMS_DISABLE_MODESET_PROBE is set");
+                        // Falls through.
+                    case EINVAL:
+                        mir::log_warning(
+                            "Failed to detect whether device %s supports KMS, continuing with lower confidence",
+                            device.devnode());
+                        maximum_suitability = mg::PlatformPriority::supported;
+                        break;
+
+                    default:
+                        mir::log_warning("Unexpected error from drmCheckModesettingSupported(): %s (%i), "
+                                         "but continuing anyway", strerror(err), err);
+                        mir::log_warning("Please file a bug at "
+                                         "https://github.com/MirServer/mir/issues containing this message");
+                        maximum_suitability = mg::PlatformPriority::supported;
+                    }
+                }
+
                 mgm::helpers::GBMHelper gbm_device{tmp_fd};
                 mgm::helpers::EGLHelper egl{MinimalGLConfig()};
 
@@ -178,10 +247,10 @@ mg::PlatformPriority probe_graphics_platform(
                      mir::log_info("Detected software renderer: %s", renderer_string);
                      // TODO:   Check if any *other* DRM devices support HW acceleration, and
                      //         use them instead.
-                     return mg::PlatformPriority::supported;
+                     maximum_suitability = mg::PlatformPriority::supported;
                 }
 
-                return mg::PlatformPriority::best;
+                return maximum_suitability;
             }
         }
         catch (std::exception const& e)

@@ -71,7 +71,7 @@ public:
         Mock::VerifyAndClearExpectations(&mock_drm);
         Mock::VerifyAndClearExpectations(&mock_gbm);
         ON_CALL(mock_egl, eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS))
-            .WillByDefault(Return("EGL_AN_extension_string EGL_MESA_platform_gbm"));
+            .WillByDefault(Return("EGL_AN_extension_string EGL_EXT_platform_base EGL_KHR_platform_gbm"));
         ON_CALL(mock_egl, eglGetDisplay(_))
             .WillByDefault(Return(fake_display));
         ON_CALL(mock_gl, glGetString(GL_RENDERER))
@@ -219,6 +219,25 @@ TEST_F(MesaGraphicsPlatform, probe_returns_unsupported_when_egl_client_extension
     EXPECT_EQ(mg::PlatformPriority::unsupported, probe(stub_vt, options));
 }
 
+TEST_F(MesaGraphicsPlatform, probe_returns_supported_when_old_egl_mesa_gbm_platform_supported)
+{
+    using namespace testing;
+
+    mtf::UdevEnvironment udev_environment;
+    boost::program_options::options_description po;
+    mir::options::ProgramOption options;
+    auto const stub_vt = std::make_shared<mtd::StubConsoleServices>();
+
+    udev_environment.add_standard_device("standard-drm-devices");
+
+    ON_CALL(mock_egl, eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS))
+        .WillByDefault(Return("EGL_KHR_not_really_an_extension EGL_MESA_platform_gbm EGL_EXT_master_of_the_house EGL_EXT_platform_base"));
+
+    mir::SharedLibrary platform_lib{mtf::server_platform("graphics-mesa-kms")};
+    auto probe = platform_lib.load_function<mg::PlatformProbe>(probe_platform);
+    EXPECT_EQ(mg::PlatformPriority::best, probe(stub_vt, options));
+}
+
 TEST_F(MesaGraphicsPlatform, probe_returns_unsupported_when_gbm_platform_not_supported)
 {
     using namespace testing;
@@ -231,9 +250,72 @@ TEST_F(MesaGraphicsPlatform, probe_returns_unsupported_when_gbm_platform_not_sup
     udev_environment.add_standard_device("standard-drm-devices");
 
     ON_CALL(mock_egl, eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS))
-        .WillByDefault(Return("EGL_KHR_not_really_an_extension EGL_EXT_master_of_the_house"));
+        .WillByDefault(Return("EGL_KHR_not_really_an_extension EGL_EXT_platform_base"));
 
     mir::SharedLibrary platform_lib{mtf::server_platform("graphics-mesa-kms")};
     auto probe = platform_lib.load_function<mg::PlatformProbe>(probe_platform);
     EXPECT_EQ(mg::PlatformPriority::unsupported, probe(stub_vt, options));
+}
+
+TEST_F(MesaGraphicsPlatform, probe_returns_unsupported_when_modesetting_is_not_supported)
+{
+    using namespace testing;
+
+    boost::program_options::options_description po;
+    mir::options::ProgramOption options;
+    auto const stub_vt = std::make_shared<mtd::StubConsoleServices>();
+
+    ON_CALL(mock_drm, drmCheckModesettingSupported(_)).WillByDefault(Return(-ENOSYS));
+
+    mir::SharedLibrary platform_lib{mtf::server_platform("graphics-mesa-kms")};
+    auto probe = platform_lib.load_function<mg::PlatformProbe>(probe_platform);
+    EXPECT_EQ(mg::PlatformPriority::unsupported, probe(stub_vt, options));
+}
+
+TEST_F(MesaGraphicsPlatform, probe_returns_supported_when_cannot_determine_kms_support)
+{
+    using namespace testing;
+
+    boost::program_options::options_description po;
+    mir::options::ProgramOption options;
+    auto const stub_vt = std::make_shared<mtd::StubConsoleServices>();
+
+    ON_CALL(mock_drm, drmCheckModesettingSupported(_)).WillByDefault(Return(-EINVAL));
+
+    mir::SharedLibrary platform_lib{mtf::server_platform("graphics-mesa-kms")};
+    auto probe = platform_lib.load_function<mg::PlatformProbe>(probe_platform);
+    EXPECT_EQ(mg::PlatformPriority::supported, probe(stub_vt, options));
+
+}
+
+TEST_F(MesaGraphicsPlatform, probe_returns_supported_when_unexpected_error_returned)
+{
+    using namespace testing;
+
+    boost::program_options::options_description po;
+    mir::options::ProgramOption options;
+    auto const stub_vt = std::make_shared<mtd::StubConsoleServices>();
+
+    ON_CALL(mock_drm, drmCheckModesettingSupported(_)).WillByDefault(Return(-ENOBUFS));
+
+    mir::SharedLibrary platform_lib{mtf::server_platform("graphics-mesa-kms")};
+    auto probe = platform_lib.load_function<mg::PlatformProbe>(probe_platform);
+    EXPECT_EQ(mg::PlatformPriority::supported, probe(stub_vt, options));
+
+}
+
+TEST_F(MesaGraphicsPlatform, probe_returns_supported_when_cannot_determine_busid)
+{
+    using namespace testing;
+
+    boost::program_options::options_description po;
+    mir::options::ProgramOption options;
+    auto const stub_vt = std::make_shared<mtd::StubConsoleServices>();
+
+    ON_CALL(mock_drm, drmGetBusid(_)).WillByDefault(Return(nullptr));
+
+    mir::SharedLibrary platform_lib{mtf::server_platform("graphics-mesa-kms")};
+    auto probe = platform_lib.load_function<mg::PlatformProbe>(probe_platform);
+    EXPECT_EQ(mg::PlatformPriority::supported, probe(stub_vt, options));
+
 }

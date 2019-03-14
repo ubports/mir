@@ -100,6 +100,45 @@ mgmh::DRMHelper::open_all_devices(
             continue;
         }
 
+        auto busid = std::unique_ptr<char, decltype(&drmFreeBusid)>{
+            drmGetBusid(tmp_fd), &drmFreeBusid
+        };
+
+        if (!busid)
+        {
+            mir::log_warning(
+                "Failed to query BusID for device %s; cannot check if KMS is available",
+                device.devnode());
+        }
+        else
+        {
+            switch (auto err = -drmCheckModesettingSupported(busid.get()))
+            {
+            case 0: break;
+
+            case ENOSYS:
+                if (getenv("MIR_MESA_KMS_DISABLE_MODESET_PROBE") == nullptr)
+                {
+                    mir::log_info("Ignoring non-KMS DRM device %s", device.devnode());
+                    error = ENOSYS;
+                    continue;
+                }
+
+                mir::log_debug("MIR_MESA_KMS_DISABLE_MODESET_PROBE is set");
+                // Falls through.
+            case EINVAL:
+                mir::log_warning(
+                    "Failed to detect whether device %s supports KMS, but continuing anyway",
+                    device.devnode());
+                break;
+
+            default:
+                mir::log_warning("Unexpected error from drmCheckModesettingSupported(): %s (%i), but continuing anyway",
+                    strerror(err), err);
+                mir::log_warning("Please file a bug at https://github.com/MirServer/mir/issues containing this message");
+            }
+        }
+
         // Can't use make_shared with the private constructor.
         opened_devices.push_back(
             std::shared_ptr<DRMHelper>{
@@ -312,7 +351,7 @@ mgm::GBMSurfaceUPtr mgmh::GBMHelper::create_scanout_surface(
     }
 
     auto surface_raw = gbm_surface_create(device, width, height,
-                                          GBM_BO_FORMAT_XRGB8888,
+                                          GBM_FORMAT_XRGB8888,
                                           format_flags);
 
     auto gbm_surface_deleter = [](gbm_surface *p) { if (p) gbm_surface_destroy(p); };
