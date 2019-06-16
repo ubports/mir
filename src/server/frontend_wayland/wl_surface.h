@@ -19,7 +19,7 @@
 #ifndef MIR_FRONTEND_WL_SURFACE_H
 #define MIR_FRONTEND_WL_SURFACE_H
 
-#include "generated/wayland_wrapper.h"
+#include "wayland_wrapper.h"
 
 #include "wl_surface_role.h"
 
@@ -62,7 +62,7 @@ struct WlSurfaceState
     class Callback : public wayland::Callback
     {
     public:
-        Callback(struct wl_client* client, struct wl_resource* parent, uint32_t id);
+        Callback(wl_resource* new_resource);
         std::shared_ptr<bool> destroyed;
     };
 
@@ -114,9 +114,7 @@ public:
         bool is_in_input_region;
     };
 
-    WlSurface(wl_client* client,
-              wl_resource* parent,
-              uint32_t id,
+    WlSurface(wl_resource* new_resource,
               std::shared_ptr<mir::Executor> const& executor,
               std::shared_ptr<mir::graphics::WaylandAllocator> const& allocator);
 
@@ -125,7 +123,7 @@ public:
     std::shared_ptr<bool> destroyed_flag() const { return destroyed; }
     geometry::Displacement offset() const { return offset_; }
     geometry::Displacement total_offset() const { return offset_ + role->total_offset(); }
-    geometry::Size buffer_size() const { return buffer_size_.value_or(geometry::Size{}); }
+    std::experimental::optional<geometry::Size> buffer_size() const { return buffer_size_; }
     bool synchronized() const;
     Position transform_point(geometry::Point point);
     wl_resource* raw_resource() const { return resource; }
@@ -171,7 +169,7 @@ private:
     void destroy() override;
     void attach(std::experimental::optional<wl_resource*> const& buffer, int32_t x, int32_t y) override;
     void damage(int32_t x, int32_t y, int32_t width, int32_t height) override;
-    void frame(uint32_t callback) override;
+    void frame(wl_resource* callback) override;
     void set_opaque_region(std::experimental::optional<wl_resource*> const& region) override;
     void set_input_region(std::experimental::optional<wl_resource*> const& region) override;
     void commit() override;

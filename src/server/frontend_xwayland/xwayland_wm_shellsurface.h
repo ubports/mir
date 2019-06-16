@@ -18,7 +18,7 @@
 #ifndef MIR_FRONTEND_XWAYLAND_WM_SHELLSURFACE_ROLE_H
 #define MIR_FRONTEND_XWAYLAND_WM_SHELLSURFACE_ROLE_H
 
-#include "generated/wayland_wrapper.h"
+#include "wayland_wrapper.h"
 #include "wl_surface.h"
 #include "window_wl_surface_role.h"
 #include "xwayland_wm_surface.h"
@@ -56,6 +56,8 @@ public:
 protected:
     void destroy() override;
     void set_transient(struct wl_resource* parent, int32_t x, int32_t y, uint32_t flags);
+    void handle_state_change(MirWindowState /*new_state*/) override {};
+    void handle_active_change(bool /*is_now_active*/) override {};
     void handle_resize(std::experimental::optional<geometry::Point> const& new_top_left, geometry::Size const& new_size) override;
 
     using WindowWlSurfaceRole::surface_id;

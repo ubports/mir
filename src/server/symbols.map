@@ -933,6 +933,7 @@ MIR_SERVER_DETAIL_FOR_TESTING_0.31 {
     mir::DefaultServerConfiguration::the_stop_callback*;
     typeinfo?for?mir::DefaultServerConfiguration;
     VTT?for?mir::DefaultServerConfiguration;
+    vtable?for?mir::DefaultServerConfiguration;
 
     mir::run_mir*;
   };
@@ -947,3 +948,16 @@ MIR_SERVER_0.32 {
     mir::DefaultServerConfiguration::default_reports*;
   };
 } MIR_SERVER_0.31;
+
+MIR_SERVER_1.2 {
+ global:
+  extern "C++" {
+    mir::Server::add_wayland_extension*;
+    mir::Server::set_wayland_extension_filter*;
+    mir::DefaultServerConfiguration::add_wayland_extension*;
+    mir::DefaultServerConfiguration::set_wayland_extension_filter*;
+    mir::frontend::get_session*;
+    mir::frontend::get_window*;
+    mir::shell::ShellWrapper::focus_prev_session*;
+  };
+} MIR_SERVER_0.32;

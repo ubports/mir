@@ -1,5 +1,5 @@
 /*
- * Copyright © 2015-2018 Canonical Ltd.
+ * Copyright © 2015-2019 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 3,
@@ -32,12 +32,13 @@
 #include "wayland_executor.h"
 #include "wlshmbuffer.h"
 
-#include "generated/wayland_wrapper.h"
+#include "wayland_wrapper.h"
 
 #include "mir/frontend/shell.h"
 #include "mir/frontend/surface.h"
 #include "mir/frontend/session_credentials.h"
 #include "mir/frontend/session_authorizer.h"
+#include "mir/frontend/wayland.h"
 
 #include "mir/compositor/buffer_stream.h"
 
@@ -82,6 +83,10 @@
 #include <sys/socket.h>
 #include <unordered_set>
 #include "mir/anonymous_shm_file.h"
+
+#if (WAYLAND_VERSION_MAJOR == 1) && (WAYLAND_VERSION_MINOR < 14)
+#define MIR_NO_WAYLAND_FILTER
+#endif
 
 namespace mf = mir::frontend;
 namespace mg = mir::graphics;
@@ -128,7 +133,6 @@ struct ClientPrivate
 static_assert(
     std::is_standard_layout<ClientPrivate>::value,
     "ClientPrivate must be standard layout for wl_container_of to be defined behaviour");
-
 
 ClientPrivate* private_from_listener(wl_listener* listener)
 {
@@ -224,30 +228,6 @@ void setup_new_client_handler(wl_display* display, std::shared_ptr<mf::Shell> co
     context->destruction_listener.notify = &cleanup_client_handler;
     wl_display_add_destroy_listener(display, &context->destruction_listener);
 }
-
-/*
-std::shared_ptr<mf::BufferStream> create_buffer_stream(mf::Session& session)
-{
-    mg::BufferProperties const props{
-        geom::Size{geom::Width{0}, geom::Height{0}},
-        mir_pixel_format_invalid,
-        mg::BufferUsage::undefined
-    };
-
-    auto const id = session.create_buffer_stream(props);
-    return session.get_buffer_stream(id);
-}
-*/
-}
-
-std::shared_ptr<mir::frontend::Session> get_session(wl_client* client)
-{
-    auto listener = wl_client_get_destroy_listener(client, &cleanup_private);
-
-    if (listener)
-        return private_from_listener(listener)->session;
-
-    return nullptr;
 }
 
 int64_t mir_input_event_get_event_time_ms(const MirInputEvent* event)
@@ -255,14 +235,14 @@ int64_t mir_input_event_get_event_time_ms(const MirInputEvent* event)
     return mir_input_event_get_event_time(event) / 1000000;
 }
 
-class WlCompositor : public wayland::Compositor
+class WlCompositor : public wayland::Compositor::Global
 {
 public:
     WlCompositor(
         struct wl_display* display,
         std::shared_ptr<mir::Executor> const& executor,
         std::shared_ptr<mg::WaylandAllocator> const& allocator)
-        : Compositor(display, 3),
+        : Global(display, 3),
           allocator{allocator},
           executor{executor}
     {
@@ -272,33 +252,48 @@ private:
     std::shared_ptr<mg::WaylandAllocator> const allocator;
     std::shared_ptr<mir::Executor> const executor;
 
-    void create_surface(wl_client* client, wl_resource* resource, uint32_t id) override;
-    void create_region(wl_client* client, wl_resource* resource, uint32_t id) override;
+    class Instance : wayland::Compositor
+    {
+    public:
+        Instance(wl_resource* new_resource, WlCompositor* compositor)
+            : wayland::Compositor{new_resource},
+              compositor{compositor}
+        {
+        }
+
+    private:
+        void create_surface(wl_resource* new_surface) override;
+        void create_region(wl_resource* new_region) override;
+        WlCompositor* const compositor;
+    };
+
+    void bind(wl_resource* new_resource)
+    {
+        new Instance{new_resource, this};
+    }
 };
 
-void WlCompositor::create_surface(wl_client* client, wl_resource* resource, uint32_t id)
+void WlCompositor::Instance::create_surface(wl_resource* new_surface)
 {
-    new WlSurface{client, resource, id, executor, allocator};
+    new WlSurface{new_surface, compositor->executor, compositor->allocator};
 }
 
-void WlCompositor::create_region(wl_client* client, wl_resource* resource, uint32_t id)
+void WlCompositor::Instance::create_region(wl_resource* new_region)
 {
-    new WlRegion{client, resource, id};
+    new WlRegion{new_region};
 }
 
 class WlShellSurface  : public wayland::ShellSurface, public WindowWlSurfaceRole
 {
 public:
     WlShellSurface(
-        wl_client* client,
-        wl_resource* parent,
-        uint32_t id,
+        wl_resource* new_resource,
         WlSurface* surface,
         std::shared_ptr<mf::Shell> const& shell,
         WlSeat& seat,
         OutputManager* output_manager)
-        : ShellSurface(client, parent, id),
-          WindowWlSurfaceRole{&seat, client, surface, shell, output_manager}
+        : ShellSurface(new_resource),
+          WindowWlSurfaceRole{&seat, wayland::ShellSurface::client, surface, shell, output_manager}
     {
     }
 
@@ -336,6 +331,10 @@ protected:
 
         apply_spec(mods);
     }
+
+    void handle_state_change(MirWindowState /*new_state*/) override {};
+
+    void handle_active_change(bool /*is_now_active*/) override {};
 
     void handle_resize(std::experimental::optional<geometry::Point> const& /*new_top_left*/,
                        geometry::Size const& new_size) override
@@ -446,7 +445,7 @@ protected:
     }
 };
 
-class WlShell : public wayland::Shell
+class WlShell : public wayland::Shell::Global
 {
 public:
     WlShell(
@@ -454,25 +453,47 @@ public:
         std::shared_ptr<mf::Shell> const& shell,
         WlSeat& seat,
         OutputManager* const output_manager)
-        : Shell(display, 1),
+        : Global(display, 1),
           shell{shell},
           seat{seat},
           output_manager{output_manager}
     {
     }
 
-    void get_shell_surface(
-        wl_client* client,
-        wl_resource* resource,
-        uint32_t id,
-        wl_resource* surface) override
-    {
-        new WlShellSurface(client, resource, id, WlSurface::from(surface), shell, seat, output_manager);
-    }
+    static auto get_window(wl_resource* window) -> std::shared_ptr<Surface>;
+
 private:
     std::shared_ptr<mf::Shell> const shell;
     WlSeat& seat;
     OutputManager* const output_manager;
+
+    class Instance : public wayland::Shell
+    {
+    public:
+        Instance(wl_resource* new_resource, WlShell* shell)
+            : wayland::Shell{new_resource},
+              shell{shell}
+        {
+        }
+
+    private:
+        WlShell* const shell;
+
+        void get_shell_surface(wl_resource* new_shell_surface, wl_resource* surface) override
+        {
+            new WlShellSurface(
+                new_shell_surface,
+                WlSurface::from(surface),
+                shell->shell,
+                shell->seat,
+                shell->output_manager);
+        }
+    };
+
+    void bind(wl_resource* new_resource) override
+    {
+        new Instance{new_resource, this};
+    }
 };
 }
 }
@@ -591,12 +612,14 @@ mf::WaylandConnector::WaylandConnector(
     std::shared_ptr<mg::GraphicBufferAllocator> const& allocator,
     std::shared_ptr<mf::SessionAuthorizer> const& session_authorizer,
     bool arw_socket,
-    std::unique_ptr<WaylandExtensions> extensions_)
+    std::unique_ptr<WaylandExtensions> extensions_,
+    WaylandProtocolExtensionFilter const& extension_filter)
     : display{wl_display_create(), &cleanup_display},
       pause_signal{eventfd(0, EFD_CLOEXEC | EFD_SEMAPHORE)},
       executor{std::make_shared<WaylandExecutor>(wl_display_get_event_loop(display.get()))},
       allocator{allocator_for_display(allocator, display.get(), executor)},
-      extensions{std::move(extensions_)}
+      extensions{std::move(extensions_)},
+      extension_filter{extension_filter}
 {
     if (pause_signal == mir::Fd::invalid)
     {
@@ -610,6 +633,14 @@ mf::WaylandConnector::WaylandConnector(
     {
         BOOST_THROW_EXCEPTION(std::runtime_error{"Failed to create wl_display"});
     }
+
+#ifndef MIR_NO_WAYLAND_FILTER
+    wl_display_set_global_filter(display.get(), &wl_display_global_filter_func_thunk, this);
+#else
+    log_warning("Cannot set Wayland protocol filter: "
+        "wl_display_set_global_filter() is unavailable in libwayland-dev "
+        WAYLAND_VERSION);
+#endif
 
     /*
      * Here be Dragons!
@@ -794,4 +825,55 @@ auto mf::WaylandConnector::get_extension(std::string const& name) const -> std::
 auto mf::WaylandConnector::get_wl_display() const -> wl_display*
 {
     return display.get();
+}
+
+bool mf::WaylandConnector::wl_display_global_filter_func_thunk(wl_client const* client, wl_global const* global, void *data)
+{
+    return static_cast<WaylandConnector*>(data)->wl_display_global_filter_func(client, global);
+}
+
+bool mf::WaylandConnector::wl_display_global_filter_func(wl_client const* client, wl_global const* global) const
+{
+#ifndef MIR_NO_WAYLAND_FILTER
+    auto const* const interface = wl_global_get_interface(global);
+    auto const session = get_session(const_cast<wl_client*>(client));
+    return extension_filter(session, interface->name);
+#else
+    (void)client, (void)global;
+    return true;
+#endif
+}
+
+auto mir::frontend::get_session(wl_client* client) -> std::shared_ptr<Session>
+{
+    auto listener = wl_client_get_destroy_listener(client, &cleanup_private);
+
+    if (listener)
+        return private_from_listener(listener)->session;
+
+    return {};
+}
+
+auto mir::frontend::get_session(wl_resource* surface) -> std::shared_ptr<Session>
+{
+    return get_session(wl_resource_get_client(surface));
+}
+
+auto mir::frontend::get_wl_shell_window(wl_resource* surface) -> std::shared_ptr<Surface>
+{
+    if (mir::wayland::Surface::is_instance(surface))
+    {
+        auto const wlsurface = WlSurface::from(surface);
+
+        auto const id = wlsurface->surface_id();
+        if (id.as_value())
+        {
+            auto const session = get_session(wlsurface->client);
+            return session->get_surface(id);
+        }
+
+        log_debug("No window currently associated with wayland::Surface %p", surface);
+    }
+
+    return {};
 }

@@ -19,7 +19,7 @@
 #ifndef MIR_FRONTEND_WL_SEAT_H
 #define MIR_FRONTEND_WL_SEAT_H
 
-#include "generated/wayland_wrapper.h"
+#include "wayland_wrapper.h"
 
 #include <unordered_map>
 #include <vector>
@@ -47,7 +47,7 @@ class WlPointer;
 class WlKeyboard;
 class WlTouch;
 
-class WlSeat : public wayland::Seat
+class WlSeat : public wayland::Seat::Global
 {
 public:
     WlSeat(
@@ -88,6 +88,7 @@ private:
     class ListenerList;
 
     class ConfigObserver;
+    class Instance;
 
     std::unique_ptr<mir::input::Keymap> const keymap;
     std::shared_ptr<ConfigObserver> const config_observer;
@@ -102,11 +103,8 @@ private:
 
     std::shared_ptr<mir::Executor> const executor;
 
-    void bind(wl_client* client, wl_resource* resource) override;
-    void get_pointer(wl_client* client, wl_resource* resource, uint32_t id) override;
-    void get_keyboard(wl_client* client, wl_resource* resource, uint32_t id) override;
-    void get_touch(wl_client* client, wl_resource* resource, uint32_t id) override;
-    void release(struct wl_client* /*client*/, struct wl_resource* us) override;
+    void bind(wl_resource* new_wl_seat) override;
+
 };
 }
 }

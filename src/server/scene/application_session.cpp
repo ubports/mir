@@ -1,5 +1,5 @@
 /*
- * Copyright © 2012-2014 Canonical Ltd.
+ * Copyright © 2012-2019 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 or 3,
@@ -18,12 +18,12 @@
 
 #include "application_session.h"
 #include "snapshot_strategy.h"
-#include "default_session_container.h"
 #include "output_properties_cache.h"
 
 #include "mir/scene/surface.h"
 #include "mir/scene/surface_event_source.h"
 #include "mir/scene/surface_creation_parameters.h"
+#include "mir/scene/session_container.h"
 #include "mir/scene/session_listener.h"
 #include "mir/scene/surface_factory.h"
 #include "mir/scene/buffer_stream_factory.h"
@@ -112,8 +112,6 @@ mf::SurfaceId ms::ApplicationSession::create_surface(
     {
         stream_id = params.content_id.value();
         buffer_stream = checked_find(stream_id)->second;
-        if (params.size != buffer_stream->stream_size())
-            buffer_stream->resize(params.size);
     }
     else
     {
@@ -127,7 +125,7 @@ mf::SurfaceId ms::ApplicationSession::create_surface(
     std::list<StreamInfo> streams;
     if (the_params.content_id.is_set())
     {
-        streams.push_back({checked_find(the_params.content_id.value())->second, {0,0}, {}});
+        streams.push_back({checked_find(the_params.content_id.value())->second, {0,0}, the_params.size});
     }
     else
     {

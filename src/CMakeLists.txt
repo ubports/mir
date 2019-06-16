@@ -2,7 +2,7 @@
 set(MIRPLATFORM_ABI 16)
 
 set(MIRAL_VERSION_MAJOR 2)
-set(MIRAL_VERSION_MINOR 4)
+set(MIRAL_VERSION_MINOR 5)
 set(MIRAL_VERSION_PATCH 0)
 set(MIRAL_VERSION ${MIRAL_VERSION_MAJOR}.${MIRAL_VERSION_MINOR}.${MIRAL_VERSION_PATCH})
 
@@ -28,6 +28,7 @@ add_subdirectory(protobuf/)
 include_directories(${MIR_GENERATED_INCLUDE_DIRECTORIES})
 
 add_subdirectory(platform/)
+add_subdirectory(wayland/)
 add_subdirectory(server/)
 add_subdirectory(miral/)
 add_subdirectory(client/)

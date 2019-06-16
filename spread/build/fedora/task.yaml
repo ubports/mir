@@ -41,10 +41,11 @@ execute: |
         mesa-libwayland-egl-devel\
         libXcursor-devel \
         yaml-cpp-devel\
-        egl-wayland-devel
+        egl-wayland-devel \
+        systemtap-sdt-devel
 
     BUILD_DIR=$(mktemp --directory)
-    cmake -H$SPREAD_PATH -B$BUILD_DIR -DCMAKE_BUILD_TYPE=Debug -DMIR_USE_LD_GOLD=ON
+    cmake -H$SPREAD_PATH -B$BUILD_DIR -DCMAKE_BUILD_TYPE=Debug -DMIR_USE_LD_GOLD=ON -DMIR_ENABLE_WLCS_TESTS=OFF
     # Run cmake again to pick up wlcs?!?!?!?!
     cmake $BUILD_DIR
     export VERBOSE=1

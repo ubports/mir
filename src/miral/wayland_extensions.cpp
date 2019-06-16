@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018 Canonical Ltd.
+ * Copyright © 2018-2019 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 3,
@@ -17,13 +17,17 @@
  */
 
 #include "miral/wayland_extensions.h"
+#include "miral/window.h"
 
+#include <mir/abnormal_exit.h>
+#include <mir/frontend/wayland.h>
+#include <mir/scene/session.h>
+#include <mir/scene/surface.h>
 #include <mir/server.h>
 #include <mir/options/option.h>
 #include <mir/options/configuration.h>
 
 #include <set>
-#include <mir/abnormal_exit.h>
 
 namespace mo = mir::options;
 
@@ -31,15 +35,18 @@ struct miral::WaylandExtensions::Self
 {
     Self(std::string const& default_value) : default_value{default_value}
     {
+        available_extensions += ":zwlr_layer_shell_v1:zxdg_output_v1:";
         validate(default_value);
     }
 
     void callback(mir::Server& server) const
     {
         validate(server.get_options()->get<std::string>(mo::wayland_extensions_opt));
+        // TODO pass bespoke stuff into server!
     }
 
-    std::string const default_value;
+    std::string default_value;
+    std::string available_extensions = mo::wayland_extensions_value;
 
     void validate(std::string extensions) const
     {
@@ -53,9 +60,6 @@ struct miral::WaylandExtensions::Self
         }
 
         std::set<std::string> supported_extension;
-        std::string available_extensions = mo::wayland_extensions_value;
-        available_extensions += ":zwlr_layer_shell_v1";
-        available_extensions += ':';
 
         for (char const* start = available_extensions.c_str(); char const* end = strchr(start, ':'); start = end+1)
         {
@@ -74,6 +78,21 @@ struct miral::WaylandExtensions::Self
             throw mir::AbnormalExit{"Unsupported wayland extensions in: " + extensions};
         }
     }
+
+    std::vector<Builder> wayland_extension_hooks;
+
+    void add_extension(Builder const& builder)
+    {
+        wayland_extension_hooks.push_back(builder);
+        available_extensions += builder.name + ":";
+    }
+
+    void add_to_default(Builder const& builder)
+    {
+        default_value += ":" + builder.name;
+    }
+
+    WaylandExtensions::Filter extensions_filter = [](Application const&, char const*) { return true; };
 };
 
 miral::WaylandExtensions::WaylandExtensions() :
@@ -88,12 +107,55 @@ miral::WaylandExtensions::WaylandExtensions(std::string const& default_value) :
 
 auto miral::WaylandExtensions::supported_extensions() const -> std::string
 {
+    return self->available_extensions.substr(0, self->available_extensions.size()-1);
+}
+
+auto miral::WaylandExtensions::recommended_extensions() -> std::string
+{
     return mo::wayland_extensions_value;
 }
 
 void miral::WaylandExtensions::operator()(mir::Server& server) const
 {
-    server.add_configuration_option(mo::wayland_extensions_opt, "Wayland extensions to enable", self->default_value);
+    self->validate(self->default_value);
+    server.add_configuration_option(
+        mo::wayland_extensions_opt,
+        ("Wayland extensions to enable. [" + supported_extensions() + "]"),
+        self->default_value);
+
+    server.add_pre_init_callback([self=self, &server]
+        {
+            for (auto const& hook : self->wayland_extension_hooks)
+            {
+                struct FrigContext : Context
+                {
+                    wl_display* display_ = nullptr;
+                    std::function<void(std::function<void()>&& work)> executor;
+
+                    wl_display* display() const override
+                    {
+                        return display_;
+                    }
+
+                    void run_on_wayland_mainloop(std::function<void()>&& work) const override
+                    {
+                        executor(std::move(work));
+                    }
+                };
+
+                auto frig = [build=hook.build, context=std::make_shared<FrigContext>()]
+                    (wl_display* display, std::function<void(std::function<void()>&& work)> const& executor)
+                {
+                    context->display_ = display;
+                    context->executor = executor;
+                    return build(context.get());
+                };
+
+                server.add_wayland_extension(hook.name, std::move(frig));
+            }
+
+            server.set_wayland_extension_filter(self->extensions_filter);
+        });
 
     server.add_init_callback([this, &server]{ self->callback(server); });
 }
@@ -101,3 +163,41 @@ void miral::WaylandExtensions::operator()(mir::Server& server) const
 miral::WaylandExtensions::~WaylandExtensions() = default;
 miral::WaylandExtensions::WaylandExtensions(WaylandExtensions const&) = default;
 auto miral::WaylandExtensions::operator=(WaylandExtensions const&) -> WaylandExtensions& = default;
+
+void miral::WaylandExtensions::add_extension(Builder const& builder)
+{
+    self->add_extension(builder);
+    self->add_to_default(builder);
+}
+
+void miral::WaylandExtensions::set_filter(miral::WaylandExtensions::Filter const& extension_filter)
+{
+    self->extensions_filter = extension_filter;
+}
+
+void miral::WaylandExtensions::add_extension_disabled_by_default(miral::WaylandExtensions::Builder const& builder)
+{
+    self->add_extension(builder);
+}
+
+auto miral::application_for(wl_client* client) -> Application
+{
+    return std::dynamic_pointer_cast<mir::scene::Session>(mir::frontend::get_session(client));
+}
+
+auto miral::application_for(wl_resource* resource) -> Application
+{
+    return std::dynamic_pointer_cast<mir::scene::Session>(mir::frontend::get_session(resource));
+}
+
+auto miral::window_for(wl_resource* surface) -> Window
+{
+    if (auto const& app = application_for(surface))
+    {
+        return {app, std::dynamic_pointer_cast<mir::scene::Surface>(mir::frontend::get_window(surface))};
+    }
+    else
+    {
+        return {};
+    }
+}

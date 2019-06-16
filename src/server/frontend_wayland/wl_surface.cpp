@@ -25,7 +25,9 @@
 #include "wlshmbuffer.h"
 #include "deleted_for_resource.h"
 
-#include "generated/wayland_wrapper.h"
+#include "wayland_wrapper.h"
+
+#include "wayland_frontend.tp.h"
 
 #include "mir/graphics/buffer_properties.h"
 #include "mir/frontend/session.h"
@@ -40,8 +42,8 @@
 namespace mf = mir::frontend;
 namespace geom = mir::geometry;
 
-mf::WlSurfaceState::Callback::Callback(struct wl_client* client, struct wl_resource* parent, uint32_t id)
-    : wayland::Callback{client, parent, id},
+mf::WlSurfaceState::Callback::Callback(wl_resource* new_resource)
+    : wayland::Callback{new_resource},
       destroyed{deleted_flag_for_resource(resource)}
 {
 }
@@ -73,12 +75,10 @@ bool mf::WlSurfaceState::surface_data_needs_refresh() const
 }
 
 mf::WlSurface::WlSurface(
-    wl_client* client,
-    wl_resource* parent,
-    uint32_t id,
+    wl_resource* new_resource,
     std::shared_ptr<Executor> const& executor,
     std::shared_ptr<graphics::WaylandAllocator> const& allocator)
-    : Surface(client, parent, id),
+    : Surface(new_resource),
         session{mf::get_session(client)},
         stream_id{session->create_buffer_stream({{}, mir_pixel_format_invalid, graphics::BufferUsage::undefined})},
         stream{session->get_buffer_stream(stream_id)},
@@ -124,7 +124,7 @@ mf::WlSurface::Position mf::WlSurface::transform_point(geom::Point point)
             return result;
     }
     geom::Rectangle surface_rect = {geom::Point{}, buffer_size_.value_or(geom::Size{})};
-    for (auto& rect : input_shape.value_or(std::vector<geom::Rectangle>{{{}, buffer_size()}}))
+    for (auto& rect : input_shape.value_or(std::vector<geom::Rectangle>{{{}, buffer_size_.value_or(geom::Size{})}}))
     {
         if (rect.intersection_with(surface_rect).contains(point))
             return {point, this, true};
@@ -264,9 +264,9 @@ void mf::WlSurface::damage_buffer(int32_t x, int32_t y, int32_t width, int32_t h
     // This isn't essential, but could enable optimizations
 }
 
-void mf::WlSurface::frame(uint32_t callback)
+void mf::WlSurface::frame(wl_resource* new_callback)
 {
-    pending.frame_callbacks.push_back(std::make_shared<WlSurfaceState::Callback>(client, resource, callback));
+    pending.frame_callbacks.push_back(std::make_shared<WlSurfaceState::Callback>(new_callback));
 }
 
 void mf::WlSurface::set_opaque_region(std::experimental::optional<wl_resource*> const& region)
@@ -332,6 +332,11 @@ void mf::WlSurface::commit(WlSurfaceState const& state)
                 mir_buffer = WlShmBuffer::mir_buffer_from_wl_buffer(
                     buffer,
                     std::move(executor_send_frame_callbacks));
+                tracepoint(
+                    mir_server_wayland,
+                    sw_buffer_committed,
+                    wl_resource_get_client(resource),
+                    mir_buffer->id().as_value());
             }
             else
             {
@@ -348,23 +353,18 @@ void mf::WlSurface::commit(WlSurfaceState const& state)
                     buffer,
                     std::move(executor_send_frame_callbacks),
                     std::move(release_buffer));
+                tracepoint(
+                    mir_server_wayland,
+                    hw_buffer_committed,
+                    wl_resource_get_client(resource),
+                    mir_buffer->id().as_value());
             }
 
-            /*
-             * This is technically incorrect - the resize and submit_buffer *should* be atomic,
-             * but are not, so a client in the process of resizing can have buffers rendered at
-             * an unexpected size.
-             *
-             * It should be good enough for now, though.
-             *
-             * TODO: Provide a mg::Buffer::logical_size() to do this properly.
-             */
             if (!input_shape && (!buffer_size_ || mir_buffer->size() != buffer_size_.value()))
             {
                 state.invalidate_surface_data(); // input shape needs to be recalculated for the new size
             }
             buffer_size_ = mir_buffer->size();
-            stream->resize(buffer_size_.value());
             stream->submit_buffer(mir_buffer);
         }
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018 Canonical Ltd.
+ * Copyright © 2018-2019 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 3,
@@ -19,7 +19,7 @@
 #ifndef MIR_FRONTEND_XDG_SHELL_STABLE_H
 #define MIR_FRONTEND_XDG_SHELL_STABLE_H
 
-#include "generated/xdg-shell_wrapper.h"
+#include "xdg-shell_wrapper.h"
 
 namespace mir
 {
@@ -27,23 +27,23 @@ namespace frontend
 {
 
 class Shell;
+class Surface;
 class WlSeat;
 class OutputManager;
 
-class XdgShellStable : public wayland::XdgWmBase
+class XdgShellStable : public wayland::XdgWmBase::Global
 {
 public:
-    XdgShellStable(struct wl_display* display, std::shared_ptr<Shell> const shell, WlSeat& seat, OutputManager* output_manager);
+    XdgShellStable(wl_display* display, std::shared_ptr<Shell> const shell, WlSeat& seat, OutputManager* output_manager);
 
-    void destroy(struct wl_client* client, struct wl_resource* resource) override;
-    void create_positioner(struct wl_client* client, struct wl_resource* resource, uint32_t id) override;
-    void get_xdg_surface(struct wl_client* client, struct wl_resource* resource, uint32_t id,
-                         struct wl_resource* surface) override;
-    void pong(struct wl_client* client, struct wl_resource* resource, uint32_t serial) override;
-
+    static auto get_window(wl_resource* surface) -> std::shared_ptr<Surface>;
     std::shared_ptr<Shell> const shell;
     WlSeat& seat;
     OutputManager* const output_manager;
+
+private:
+    class Instance;
+    void bind(wl_resource* new_resource) override;
 };
 
 }
