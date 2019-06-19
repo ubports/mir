@@ -58,6 +58,8 @@ Build-Depends: cmake,
                libyaml-cpp-dev,
 #               libnvidia-egl-wayland-dev [amd64 i386],
 #               eglexternalplatform-dev [amd64 i386]
+               systemtap-sdt-dev,
+#               wlcs
 Standards-Version: 3.9.4
 Homepage: https://launchpad.net/mir
 # If you aren't a member of ~mir-team but need to upload packaging changes,
@@ -80,7 +82,7 @@ Description: Display server for Ubuntu - RPC definitions
 
 #TODO: Packaging infrastructure for better dependency generation,
 #      ala pkg-xorg's xviddriver:Provides and ABI detection.
-Package: libmirserver47
+Package: libmirserver48
 Section: libs
 Architecture: linux-any
 Multi-Arch: same
@@ -159,7 +161,7 @@ Section: libdevel
 Architecture: linux-any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
-Depends: libmirserver47 (= ${binary:Version}),
+Depends: libmirserver48 (= ${binary:Version}),
          libmirplatform-dev (= ${binary:Version}),
          libmircommon-dev (= ${binary:Version}),
          libglm-dev,
@@ -562,3 +564,30 @@ Description: Developer files for the Mir ABI-stable abstraction layer
  .
  Contains header files required for development using the MirAL abstraction
  layer.
+
+Package: libmirwayland0
+Section: libs
+Architecture: linux-any
+Multi-Arch: same
+Pre-Depends: ${misc:Pre-Depends}
+Depends: ${misc:Depends},
+         ${shlibs:Depends},
+Description: Display server for Ubuntu - generated wrappers for Wayland
+ protocol extensions.
+ .
+ Contains the shared library containing generated wrappers for Wayland
+ protocol extensions
+
+Package: libmirwayland-dev
+Section: libdevel
+Architecture: linux-any
+Multi-Arch: same
+Pre-Depends: ${misc:Pre-Depends}
+Depends: libmirwayland0 (= ${binary:Version}),
+         libmircore-dev (= ${binary:Version}),
+         ${misc:Depends},
+Description: Display server for Ubuntu - generated wrappers for Wayland
+ protocol extensions.
+ .
+ Contains the developer files for using the shared library containing generated
+ wrappers for Wayland protocol extensions

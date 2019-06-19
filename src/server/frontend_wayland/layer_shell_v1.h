@@ -19,7 +19,7 @@
 #ifndef MIR_FRONTEND_LAYER_SHELL_V1_H
 #define MIR_FRONTEND_LAYER_SHELL_V1_H
 
-#include "generated/wlr-layer-shell-unstable-v1_wrapper.h"
+#include "wlr-layer-shell-unstable-v1_wrapper.h"
 
 namespace mir
 {
@@ -30,18 +30,18 @@ class Shell;
 class WlSeat;
 class OutputManager;
 
-class LayerShellV1 : public wayland::LayerShellV1
+class LayerShellV1 : public wayland::LayerShellV1::Global
 {
 public:
-    LayerShellV1(struct wl_display* display, std::shared_ptr<Shell> const shell, WlSeat& seat, OutputManager* output_manager);
-
-    void get_layer_surface(struct wl_client* client, struct wl_resource* resource, uint32_t id,
-                           struct wl_resource* surface, std::experimental::optional<struct wl_resource*> const& output,
-                           uint32_t layer, std::string const& namespace_) override;
+    LayerShellV1(wl_display* display, std::shared_ptr<Shell> const shell, WlSeat& seat, OutputManager* output_manager);
 
     std::shared_ptr<Shell> const shell;
     WlSeat& seat;
     OutputManager* const output_manager;
+
+private:
+    class Instance;
+    void bind(wl_resource* new_resource);
 };
 
 }

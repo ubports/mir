@@ -26,6 +26,8 @@
 #include <wayland-server-core.h>
 #include <unordered_map>
 #include <thread>
+#include <vector>
+#include <mir/server_configuration.h>
 
 namespace mir
 {
@@ -54,6 +56,7 @@ class WlSeat;
 class OutputManager;
 
 class Shell;
+class Surface;
 class MirDisplay;
 class SessionAuthorizer;
 class DataDeviceManager;
@@ -72,7 +75,7 @@ public:
 
 protected:
 
-    virtual void add_extension(std::string const name, std::shared_ptr<void> implementation);
+    void add_extension(std::string const name, std::shared_ptr<void> implementation);
     virtual void custom_extensions(wl_display* display, std::shared_ptr<Shell> const& shell, WlSeat* seat, OutputManager* const output_manager);
 
 private:
@@ -82,6 +85,8 @@ private:
 class WaylandConnector : public Connector
 {
 public:
+    using WaylandProtocolExtensionFilter = std::function<bool(std::shared_ptr<frontend::Session> const&, char const*)>;
+
     WaylandConnector(
         optional_value<std::string> const& display_name,
         std::shared_ptr<Shell> const& shell,
@@ -91,7 +96,8 @@ public:
         std::shared_ptr<graphics::GraphicBufferAllocator> const& allocator,
         std::shared_ptr<SessionAuthorizer> const& session_authorizer,
         bool arw_socket,
-        std::unique_ptr<WaylandExtensions> extensions);
+        std::unique_ptr<WaylandExtensions> extensions,
+        WaylandProtocolExtensionFilter const& extension_filter);
 
     ~WaylandConnector() override;
 
@@ -111,6 +117,9 @@ public:
     auto get_wl_display() const -> wl_display*;
 
 private:
+    bool wl_display_global_filter_func(wl_client const* client, wl_global const* global) const;
+    static bool wl_display_global_filter_func_thunk(wl_client const* client, wl_global const* global, void* data);
+
     std::unique_ptr<wl_display, void(*)(wl_display*)> const display;
     mir::Fd const pause_signal;
     std::unique_ptr<WlCompositor> compositor_global;
@@ -125,12 +134,16 @@ private:
     wl_event_source* pause_source;
     std::string wayland_display;
 
+    WaylandProtocolExtensionFilter const extension_filter;
+
     // Only accessed on event loop
     std::unordered_map<int, std::function<void(std::shared_ptr<Session> const& session)>> mutable connect_handlers;
 };
 
 auto create_wl_shell(wl_display* display, std::shared_ptr<Shell> const& shell, WlSeat* seat, OutputManager* const output_manager)
     -> std::shared_ptr<void>;
+
+auto get_wl_shell_window(wl_resource* surface) -> std::shared_ptr<Surface>;
 }
 }
 

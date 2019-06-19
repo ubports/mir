@@ -19,16 +19,16 @@
 #ifndef MIR_FRONTEND_DATA_DEVICE_H_
 #define MIR_FRONTEND_DATA_DEVICE_H_
 
-#include "generated/wayland_wrapper.h"
+#include "wayland_wrapper.h"
 
 namespace mir
 {
 namespace frontend
 {
-class DataDeviceManager : public wayland::DataDeviceManager
+class DataDeviceManager : public wayland::DataDeviceManager::Global
 {
 public:
-    using wayland::DataDeviceManager::DataDeviceManager;
+    using wayland::DataDeviceManager::Global::Global;
 };
 
 auto create_data_device_manager(struct wl_display* display) -> std::unique_ptr<DataDeviceManager>;

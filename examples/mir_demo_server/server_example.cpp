@@ -1,5 +1,5 @@
 /*
- * Copyright © 2012-2017 Canonical Ltd.
+ * Copyright © 2012-2019 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 or 3 as
@@ -24,17 +24,14 @@
 #include "server_example_test_client.h"
 #include "server_example_input_device_config.h"
 
-#include "tiling_window_manager.h"
-#include "floating_window_manager.h"
-#include "titlebar_config.h"
-#include "sw_splash.h"
-
+#include <miral/command_line_option.h>
 #include <miral/cursor_theme.h>
 #include <miral/display_configuration_option.h>
+#include <miral/minimal_window_manager.h>
 #include <miral/runner.h>
-#include <miral/window_management_options.h>
-#include <miral/x11_support.h>
+#include <miral/set_window_management_policy.h>
 #include <miral/wayland_extensions.h>
+#include <miral/x11_support.h>
 
 #include "mir/abnormal_exit.h"
 #include "mir/server.h"
@@ -131,14 +128,6 @@ try
     std::function<void()> shutdown_hook{[]{}};
     runner.add_stop_callback([&] { shutdown_hook(); });
 
-    SwSplash spinner;
-    miral::InternalClientLauncher launcher;
-    miral::WindowManagerOptions window_managers
-        {
-            miral::add_window_manager_policy<FloatingWindowManagerPolicy>("floating", spinner, launcher, shutdown_hook),
-            miral::add_window_manager_policy<TilingWindowManagerPolicy>("tiling", spinner, launcher),
-        };
-
     InputFilters input_filters;
     me::TestClientRunner test_runner;
 
@@ -147,11 +136,9 @@ try
         miral::display_configuration_options,
         me::add_log_host_lifecycle_option_to,
         me::add_glog_options_to,
-        miral::StartupInternalClient{spinner},
         miral::X11Support{},
-        miral::WaylandExtensions{"wl_shell:xdg_wm_base:zxdg_shell_v6:zwlr_layer_shell_v1"},
-        launcher,
-        window_managers,
+        miral::WaylandExtensions{miral::WaylandExtensions::recommended_extensions() + ":zwlr_layer_shell_v1"},
+        miral::set_window_management_policy<miral::MinimalWindowManager>(),
         me::add_custom_compositor_option_to,
         me::add_input_device_configuration_options_to,
         add_timeout_option_to,

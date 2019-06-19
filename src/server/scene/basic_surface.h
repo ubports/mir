@@ -103,7 +103,7 @@ public:
     void set_transformation(glm::mat4 const&) override;
 
     bool visible() const override;
-    
+
     graphics::RenderableList generate_renderables(compositor::CompositorID id) const override;
     int buffers_ready_for_compositor(void const* compositor_id) const override;
 
@@ -113,8 +113,9 @@ public:
     int query(MirWindowAttrib attrib) const override;
     void hide() override;
     void show() override;
-    
+
     void set_cursor_image(std::shared_ptr<graphics::CursorImage> const& image) override;
+    void remove_cursor_image(); // Removes the cursor image without resetting the stream
     std::shared_ptr<graphics::CursorImage> cursor_image() const override;
 
     void set_cursor_stream(std::shared_ptr<frontend::BufferStream> const& stream,

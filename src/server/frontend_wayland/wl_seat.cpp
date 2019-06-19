@@ -16,7 +16,7 @@
  * Authored by: Christopher James Halse Rogers <christopher.halse.rogers@canonical.com>
  */
 
-#include "generated/wayland_wrapper.h"
+#include "wayland_wrapper.h"
 
 #include "wl_seat.h"
 
@@ -139,12 +139,26 @@ void mf::WlSeat::ConfigObserver::changes_complete()
     on_keymap_commit(pending_keymap);
 }
 
+class mf::WlSeat::Instance : public wayland::Seat
+{
+public:
+    Instance(wl_resource* new_resource, mf::WlSeat* seat);
+
+    mf::WlSeat* const seat;
+
+private:
+    void get_pointer(wl_resource* new_pointer) override;
+    void get_keyboard(wl_resource* new_keyboard) override;
+    void get_touch(wl_resource* new_touch) override;
+    void release() override;
+};
+
 mf::WlSeat::WlSeat(
     wl_display* display,
     std::shared_ptr<mi::InputDeviceHub> const& input_hub,
     std::shared_ptr<mi::Seat> const& seat,
     std::shared_ptr<mir::Executor> const& executor)
-    :   Seat(display, 5),
+    :   Global(display, 5),
         keymap{std::make_unique<input::Keymap>()},
         config_observer{
             std::make_shared<ConfigObserver>(
@@ -170,7 +184,7 @@ mf::WlSeat::~WlSeat()
 
 auto mf::WlSeat::from(struct wl_resource* seat) -> WlSeat*
 {
-    return static_cast<mf::WlSeat*>(wayland::Seat::from(seat));
+    return static_cast<mf::WlSeat::Instance*>(wayland::Seat::from(seat))->seat;
 }
 
 void mf::WlSeat::for_each_listener(wl_client* client, std::function<void(WlPointer*)> func)
@@ -199,43 +213,45 @@ void mf::WlSeat::spawn(std::function<void()>&& work)
     executor->spawn(std::move(work));
 }
 
-void mf::WlSeat::bind(wl_client* /*client*/, wl_resource* resource)
+void mf::WlSeat::bind(wl_resource* new_wl_seat)
 {
-    // TODO: Read the actual capabilities. Do we have a keyboard? Mouse? Touch?
-    send_capabilities_event(resource,
-                            Capability::pointer | Capability::keyboard | Capability::touch);
-    if (version_supports_name(resource))
-        send_name_event(resource, "seat0");
+    new Instance{new_wl_seat, this};
 }
 
-void mf::WlSeat::get_pointer(wl_client* client, wl_resource* resource, uint32_t id)
+mf::WlSeat::Instance::Instance(wl_resource* new_resource, mf::WlSeat* seat)
+    : wayland::Seat(new_resource),
+      seat{seat}
 {
-    pointer_listeners->register_listener(
+    // TODO: Read the actual capabilities. Do we have a keyboard? Mouse? Touch?
+    send_capabilities_event(Capability::pointer | Capability::keyboard | Capability::touch);
+    if (version_supports_name())
+        send_name_event("seat0");
+}
+
+void mf::WlSeat::Instance::get_pointer(wl_resource* new_pointer)
+{
+    seat->pointer_listeners->register_listener(
         client,
         new WlPointer{
-            client,
-            resource,
-            id,
-            [listeners = pointer_listeners, client](WlPointer* listener)
+            new_pointer,
+            [listeners = seat->pointer_listeners, client = client](WlPointer* listener)
             {
                 listeners->unregister_listener(client, listener);
             }});
 }
 
-void mf::WlSeat::get_keyboard(wl_client* client, wl_resource* resource, uint32_t id)
+void mf::WlSeat::Instance::get_keyboard(wl_resource* new_keyboard)
 {
-    keyboard_listeners->register_listener(
+    seat->keyboard_listeners->register_listener(
         client,
         new WlKeyboard{
-            client,
-            resource,
-            id,
-            *keymap,
-            [listeners = keyboard_listeners, client](WlKeyboard* listener)
+            new_keyboard,
+            *seat->keymap,
+            [listeners = seat->keyboard_listeners, client = client](WlKeyboard* listener)
             {
                 listeners->unregister_listener(client, listener);
             },
-            [seat = seat]()
+            [seat = seat->seat]()
             {
                 std::unordered_set<uint32_t> pressed_keys;
 
@@ -263,23 +279,21 @@ void mf::WlSeat::get_keyboard(wl_client* client, wl_resource* resource, uint32_t
             }});
 }
 
-void mf::WlSeat::get_touch(wl_client* client, wl_resource* resource, uint32_t id)
+void mf::WlSeat::Instance::get_touch(wl_resource* new_touch)
 {
-    touch_listeners->register_listener(
+    seat->touch_listeners->register_listener(
         client,
         new WlTouch{
-            client,
-            resource,
-            id,
-            [listeners = touch_listeners, client](WlTouch* listener)
+            new_touch,
+            [listeners = seat->touch_listeners, client = client](WlTouch* listener)
             {
                 listeners->unregister_listener(client, listener);
             }});
 }
 
-void mf::WlSeat::release(struct wl_client* /*client*/, struct wl_resource* us)
+void mf::WlSeat::Instance::release()
 {
-    wl_resource_destroy(us);
+    destroy_wayland_object();
 }
 
 void mf::WlSeat::add_focus_listener(ListenerTracker* listener)

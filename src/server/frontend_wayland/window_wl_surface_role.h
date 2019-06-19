@@ -79,13 +79,16 @@ public:
 
     void set_state_now(MirWindowState state);
 
+    virtual void handle_state_change(MirWindowState new_state) = 0;
+    virtual void handle_active_change(bool is_now_active) = 0;
     virtual void handle_resize(std::experimental::optional<geometry::Point> const& new_top_left,
                                geometry::Size const& new_size) = 0;
 
 protected:
     std::shared_ptr<bool> const destroyed;
 
-    geometry::Size window_size();
+    std::experimental::optional<geometry::Size> window_size();
+    std::experimental::optional<geometry::Size> requested_window_size(); // Window size requested by Mir
     MirWindowState window_state();
     bool is_active();
     uint64_t latest_timestamp_ns();
@@ -99,7 +102,8 @@ private:
     OutputManager* output_manager;
     std::shared_ptr<WlSurfaceEventSink> const sink;
     std::unique_ptr<scene::SurfaceCreationParameters> const params;
-    optional_value<geometry::Size> window_size_;
+    std::experimental::optional<geometry::Size> pending_window_size;
+    std::experimental::optional<geometry::Size> committed_window_size;
     SurfaceId surface_id_;
     std::unique_ptr<shell::SurfaceSpecification> pending_changes;
 

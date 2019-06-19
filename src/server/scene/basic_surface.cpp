@@ -201,7 +201,14 @@ struct ms::CursorStreamImageAdapter
 private:
     void post_cursor_image_from_current_buffer() const
     {
-        surface.set_cursor_from_buffer(*stream->lock_compositor_buffer(this), hotspot);
+        if (stream->has_submitted_buffer())
+        {
+            surface.set_cursor_from_buffer(*stream->lock_compositor_buffer(this), hotspot);
+        }
+        else
+        {
+            surface.remove_cursor_image();
+        }
     }
 
     ms::BasicSurface& surface;
@@ -328,15 +335,6 @@ void ms::BasicSurface::resize(geom::Size const& desired_size)
     if (new_size == size())
         return;
 
-    /*
-     * Other combinations may still be invalid (like dimensions too big or
-     * insufficient resources), but those are runtime and platform-specific, so
-     * not predictable here. Such critical exceptions would arise from
-     * the platform buffer allocator as a runtime_error via:
-     */
-    surface_buffer_stream->resize(new_size);
-
-    // Now the buffer stream has successfully resized, update the state second;
     {
         std::unique_lock<std::mutex> lock(guard);
         surface_rect.size = new_size;
@@ -616,6 +614,12 @@ void ms::BasicSurface::set_cursor_image(std::shared_ptr<mg::CursorImage> const& 
         observers.cursor_image_set_to(this, *image);
     else
         observers.cursor_image_removed(this);
+}
+
+void ms::BasicSurface::remove_cursor_image()
+{
+    cursor_image_ = nullptr;
+    observers.cursor_image_removed(this);
 }
 
 std::shared_ptr<mg::CursorImage> ms::BasicSurface::cursor_image() const

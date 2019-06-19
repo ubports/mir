@@ -28,8 +28,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 set(MIR_VERSION_MAJOR 1)
-set(MIR_VERSION_MINOR 1)
-set(MIR_VERSION_PATCH 2)
+set(MIR_VERSION_MINOR 2)
+set(MIR_VERSION_PATCH 0)
 
 add_definitions(-DMIR_VERSION_MAJOR=${MIR_VERSION_MAJOR})
 add_definitions(-DMIR_VERSION_MINOR=${MIR_VERSION_MINOR})
@@ -239,6 +239,14 @@ endif()
 list(GET MIR_PLATFORM 0 MIR_TEST_PLATFORM)
 
 option(MIR_ENABLE_TESTS "Build tests" ON)
+CMAKE_DEPENDENT_OPTION(
+  MIR_ENABLE_WLCS_TESTS "Also Build WLCS tests" ON
+  "MIR_ENABLE_TESTS" OFF
+)
+
+if (MIR_ENABLE_WLCS_TESTS)
+  pkg_check_modules(WLCS REQUIRED wlcs)
+endif()
 
 foreach(platform IN LISTS MIR_PLATFORM)
   if (platform STREQUAL "mesa-kms")
@@ -262,8 +270,8 @@ find_package(Protobuf REQUIRED )
 find_package(CapnProto REQUIRED)
 find_package(GLog REQUIRED)
 find_package(GFlags REQUIRED)
-find_package(LTTngUST REQUIRED)
 
+pkg_check_modules(LTTNG_UST REQUIRED lttng-ust)
 pkg_check_modules(UDEV REQUIRED libudev)
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(GIO REQUIRED gio-2.0 gio-unix-2.0)
@@ -274,10 +282,27 @@ pkg_check_modules(XCB_COMPOSITE REQUIRED xcb-composite)
 pkg_check_modules(XCB_XFIXES REQUIRED xcb-xfixes)
 pkg_check_modules(XCB_RENDER REQUIRED xcb-render)
 pkg_check_modules(X11_XCURSOR REQUIRED xcursor)
+pkg_check_modules(DRM REQUIRED libdrm)
 
 include_directories (SYSTEM ${GLESv2_INCLUDE_DIRS})
 include_directories (SYSTEM ${EGL_INCLUDE_DIRS})
 include_directories (SYSTEM ${GLM_INCLUDE_DIRS})
+
+include(CheckCXXSymbolExists)
+list(APPEND CMAKE_REQUIRED_INCLUDES ${DRM_INCLUDE_DIRS})
+list(APPEND CMAKE_REQUIRED_LIBRARIES ${DRM_LIBRARIES})
+
+check_cxx_symbol_exists("drmIsMaster" "xf86drm.h" MIR_LIBDRM_HAS_IS_MASTER)
+
+# Add USDT hooks to all LTTNG tracepoints
+#
+# This might be gnarly; this tweaks an LTTNG header to enable its
+# USDT integration. The integration only involves #include-ing a
+# SystemTap header and calling a macro from it in the LTTNG macro,
+# but there aren't guarantees this won't change in future.
+add_definitions(  # Drop in favour of add_compile_definitions when we drop 16.04
+  -DLTTNG_UST_HAVE_SDT_INTEGRATION
+)
 
 #
 # Full OpenGL support is possibly complete but not yet perfect. So is
@@ -318,7 +343,6 @@ endif()
 
 if (MIR_BUILD_PLATFORM_MESA_KMS OR MIR_BUILD_PLATFORM_MESA_X11)
   pkg_check_modules( GBM REQUIRED gbm>=9.0.0)
-  pkg_check_modules( DRM REQUIRED libdrm )
   if (GBM_VERSION VERSION_LESS 11)
     message(WARNING "Hybrid support requires libgbm from Mesa 11.0 or greater. Hybrid setups will not work")
     add_definitions(-DMIR_NO_HYBRID_SUPPORT)
@@ -330,7 +354,6 @@ endif()
 
 if (MIR_BUILD_PLATFORM_EGLSTREAM_KMS)
   pkg_check_modules(EPOXY REQUIRED epoxy)
-  pkg_check_modules(DRM REQUIRED libdrm)
 endif()
 
 # This incantation gets the MIR_EGL_SUPPORTED default right for Mesa
@@ -372,10 +395,10 @@ if (MIR_ENABLE_TESTS)
 
   # There's no nice way to format this. Thanks CMake.
   mir_add_test(NAME LGPL-required
-    COMMAND /bin/sh -c "! grep -rl --exclude-dir=wlcs 'GNU General' ${PROJECT_SOURCE_DIR}/src/client ${PROJECT_SOURCE_DIR}/include/client ${PROJECT_SOURCE_DIR}/src/core ${PROJECT_SOURCE_DIR}/include/core ${PROJECT_SOURCE_DIR}/src/common ${PROJECT_SOURCE_DIR}/include/common ${PROJECT_SOURCE_DIR}/src/include/common ${PROJECT_SOURCE_DIR}/src/platform ${PROJECT_SOURCE_DIR}/include/platform ${PROJECT_SOURCE_DIR}/src/include/platform ${PROJECT_SOURCE_DIR}/src/platforms ${PROJECT_SOURCE_DIR}/include/platforms ${PROJECT_SOURCE_DIR}/src/include/platforms ${PROJECT_SOURCE_DIR}/src/renderers ${PROJECT_SOURCE_DIR}/include/renderers ${PROJECT_SOURCE_DIR}/src/include/renderers ${PROJECT_SOURCE_DIR}/src/capnproto"
+    COMMAND /bin/sh -c "! grep -rl --exclude-dir=protocol --exclude=org_kde* 'GNU General' ${PROJECT_SOURCE_DIR}/src/client ${PROJECT_SOURCE_DIR}/include/client ${PROJECT_SOURCE_DIR}/src/core ${PROJECT_SOURCE_DIR}/include/core ${PROJECT_SOURCE_DIR}/src/common ${PROJECT_SOURCE_DIR}/include/common ${PROJECT_SOURCE_DIR}/src/include/common ${PROJECT_SOURCE_DIR}/src/platform ${PROJECT_SOURCE_DIR}/include/platform ${PROJECT_SOURCE_DIR}/src/include/platform ${PROJECT_SOURCE_DIR}/src/platforms ${PROJECT_SOURCE_DIR}/include/platforms ${PROJECT_SOURCE_DIR}/src/include/platforms ${PROJECT_SOURCE_DIR}/src/renderers ${PROJECT_SOURCE_DIR}/include/renderers ${PROJECT_SOURCE_DIR}/src/include/renderers ${PROJECT_SOURCE_DIR}/src/capnproto"
   )
   mir_add_test(NAME GPL-required
-    COMMAND /bin/sh -c "! grep -rl --exclude-dir=wlcs 'GNU Lesser' ${PROJECT_SOURCE_DIR}/src/server ${PROJECT_SOURCE_DIR}/include/server ${PROJECT_SOURCE_DIR}/src/include/server ${PROJECT_SOURCE_DIR}/tests ${PROJECT_SOURCE_DIR}/examples"
+    COMMAND /bin/sh -c "! grep -rl --exclude-dir=protocol --exclude=org_kde* 'GNU Lesser' ${PROJECT_SOURCE_DIR}/src/server ${PROJECT_SOURCE_DIR}/include/server ${PROJECT_SOURCE_DIR}/src/include/server ${PROJECT_SOURCE_DIR}/tests ${PROJECT_SOURCE_DIR}/examples"
   )
 
   mir_add_test(NAME package-abis

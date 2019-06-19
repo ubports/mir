@@ -16,6 +16,8 @@
  * Authored by: Christopher James Halse Rogers <christopher.halse.rogers@canonical.com>
  */
 
+#include "mir/log.h"
+
 #include "wl_subcompositor.h"
 #include "wl_surface.h"
 
@@ -24,24 +26,52 @@
 namespace mf = mir::frontend;
 namespace geom = mir::geometry;
 
-mf::WlSubcompositor::WlSubcompositor(struct wl_display* display)
-    : wayland::Subcompositor(display, 1)
-{}
-
-void mf::WlSubcompositor::destroy(struct wl_client* /*client*/, struct wl_resource* resource)
+namespace mir
 {
-    destroy_wayland_object(resource);
+namespace frontend
+{
+class WlSubcompositorInstance: wayland::Subcompositor
+{
+public:
+    WlSubcompositorInstance(wl_resource* new_resource);
+
+private:
+    void destroy() override;
+    void get_subsurface(wl_resource* new_subsurface, wl_resource* surface, wl_resource* parent) override;
+};
+}
 }
 
-void mf::WlSubcompositor::get_subsurface(struct wl_client* client, struct wl_resource* resource, uint32_t id,
-                                         struct wl_resource* surface, struct wl_resource* parent)
+mf::WlSubcompositor::WlSubcompositor(wl_display* display)
+    : Global{display, 1}
 {
-    new WlSubsurface(client, resource, id, WlSurface::from(surface), WlSurface::from(parent));
 }
 
-mf::WlSubsurface::WlSubsurface(struct wl_client* client, struct wl_resource* object_parent, uint32_t id,
-                               WlSurface* surface, WlSurface* parent_surface)
-    : wayland::Subsurface(client, object_parent, id),
+void mf::WlSubcompositor::bind(wl_resource* new_wl_subcompositor)
+{
+    new WlSubcompositorInstance(new_wl_subcompositor);
+}
+
+mf::WlSubcompositorInstance::WlSubcompositorInstance(wl_resource* new_resource)
+    : wayland::Subcompositor(new_resource)
+{
+}
+
+void mf::WlSubcompositorInstance::destroy()
+{
+    destroy_wayland_object();
+}
+
+void mf::WlSubcompositorInstance::get_subsurface(
+    wl_resource* new_subsurface,
+    wl_resource* surface,
+    wl_resource* parent)
+{
+    new WlSubsurface(new_subsurface, WlSurface::from(surface), WlSurface::from(parent));
+}
+
+mf::WlSubsurface::WlSubsurface(wl_resource* new_subsurface, WlSurface* surface, WlSurface* parent_surface)
+    : wayland::Subsurface(new_subsurface),
       surface{surface},
       parent{parent_surface->add_child(this)},
       parent_destroyed{parent_surface->destroyed_flag()},
@@ -98,13 +128,13 @@ void mf::WlSubsurface::set_position(int32_t x, int32_t y)
 void mf::WlSubsurface::place_above(struct wl_resource* sibling)
 {
     (void)sibling;
-    // TODO
+    log_warning("TODO: wl_subsurface.place_above not implemented");
 }
 
 void mf::WlSubsurface::place_below(struct wl_resource* sibling)
 {
     (void)sibling;
-    // TODO
+    log_warning("TODO: wl_subsurface.place_below not implemented");
 }
 
 void mf::WlSubsurface::set_sync()
@@ -152,5 +182,5 @@ void mf::WlSubsurface::commit(WlSurfaceState const& state)
 void mf::WlSubsurface::visiblity(bool visible)
 {
     (void)visible;
-    // TODO
+    log_warning("TODO: wl_subsurface.visiblity not implemented");
 }
