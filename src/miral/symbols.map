@@ -375,6 +375,7 @@ global:
 MIRAL_2.5 {
 global:
   extern "C++" {
+    miral::Output::id*;
     miral::MinimalWindowManager::?MinimalWindowManager*;
     miral::MinimalWindowManager::MinimalWindowManager*;
     miral::MinimalWindowManager::advise_focus_gained*;
