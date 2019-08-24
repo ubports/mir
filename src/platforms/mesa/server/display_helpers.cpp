@@ -57,9 +57,15 @@ mgmh::DRMHelper::open_all_devices(
 {
     int error = ENODEV; //Default error is "there are no DRM devices"
 
+    char* card_to_use = getenv("MIR_MESA_KMS_USE_DRM_DEVICE");
+
     mir::udev::Enumerator devices(udev);
     devices.match_subsystem("drm");
-    devices.match_sysname("card[0-9]");
+    if(card_to_use == nullptr) {
+        devices.match_sysname("card[0-9]");
+    } else {
+        devices.match_sysname(card_to_use);
+    }
 
     devices.scan_devices();
 
