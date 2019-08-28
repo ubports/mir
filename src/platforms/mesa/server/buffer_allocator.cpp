@@ -120,7 +120,7 @@ private:
 
             const EGLint image_attrs[] =
             {
-                EGL_IMAGE_PRESERVED_KHR, EGL_TRUE,
+                /*EGL_IMAGE_PRESERVED_KHR, EGL_TRUE, // does not work on Mali*/
                 EGL_NONE
             };
 
@@ -456,7 +456,7 @@ public:
 
         const EGLint image_attrs[] =
             {
-                EGL_IMAGE_PRESERVED_KHR, EGL_TRUE,
+                /*EGL_IMAGE_PRESERVED_KHR, EGL_TRUE, // does not work on Mali*/
                 EGL_WAYLAND_PLANE_WL, 0,
                 EGL_NONE
             };
