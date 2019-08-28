@@ -712,7 +712,7 @@ bool mgm::RealKMSOutput::buffer_requires_migration(gbm_bo* bo) const
     }
 
     // These *should* match if we're on the same device
-    return strcmp(gbm_device_node.get(), drm_device_node.get()) != 0;
+    return strcmp(gbm_device_node.get(), drm_device_node.get()) != 0 && false;
 }
 
 int mgm::RealKMSOutput::drm_fd() const

@@ -67,7 +67,8 @@ public:
 
     void make_current() const override
     {
-        egl.make_current();
+        auto egl_ = const_cast<mgm::helpers::EGLHelper*>(&egl);
+        egl_->make_current();
     }
 
     void release_current() const override

@@ -53,7 +53,7 @@ public:
                EGLContext shared_context);
 
     bool swap_buffers();
-    bool make_current() const;
+    bool make_current();
     bool release_current() const;
 
     EGLContext context() const { return egl_context; }
@@ -70,6 +70,7 @@ private:
     EGLSurface egl_surface;
     bool should_terminate_egl;
     EGLExtensions::PlatformBaseEXT platform_base;
+    GBMHelper const* gbm_private;
 };
 }
 }

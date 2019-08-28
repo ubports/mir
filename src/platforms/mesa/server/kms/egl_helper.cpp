@@ -152,9 +152,25 @@ bool mgmh::EGLHelper::swap_buffers()
     return (ret == EGL_TRUE);
 }
 
-bool mgmh::EGLHelper::make_current() const
+bool mgmh::EGLHelper::make_current()
 {
+    if (!egl_surface)
+    {
+        auto &gbm = *gbm_private;
+
+        gbm_surface* surface_gbm = gbm_surface_create(gbm.device, 8, 8,
+            GBM_FORMAT_XRGB8888,
+            GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
+        egl_surface = eglCreateWindowSurface(egl_display, egl_config, surface_gbm, nullptr);
+    }
+
     auto ret = eglMakeCurrent(egl_display, egl_surface, egl_surface, egl_context);
+
+    if (!ret)
+        mir::log_warning(
+            "Failed to make context current: %s",
+            mg::egl_category().message(eglGetError()).c_str());
+
     eglBindAPI(MIR_SERVER_EGL_OPENGL_API);
     return (ret == EGL_TRUE);
 }
@@ -207,6 +223,8 @@ void mgmh::EGLHelper::setup_internal(GBMHelper const& gbm, bool initialize, EGLi
 
     static const EGLint required_egl_version_major = 1;
     static const EGLint required_egl_version_minor = 4;
+
+    gbm_private = &gbm;
 
     egl_display = platform_base.eglGetPlatformDisplay(
         EGL_PLATFORM_GBM_KHR,      // EGL_PLATFORM_GBM_MESA has the same value.

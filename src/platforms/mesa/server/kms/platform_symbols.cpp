@@ -235,8 +235,9 @@ mg::PlatformPriority probe_graphics_platform(
                 auto const renderer_string = reinterpret_cast<char const*>(glGetString(GL_RENDERER));
                 if (!renderer_string)
                 {
-                    throw mg::gl_error(
-                        "Probe failed to query GL renderer");
+//                    throw mg::gl_error(
+                        mir::log_warning("Probe failed to query GL renderer");
+                      return maximum_suitability;
                 }
 
                 if (strncmp(
