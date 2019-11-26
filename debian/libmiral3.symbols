@@ -333,6 +333,7 @@ libmiral.so.3 libmiral3 #MINVER#
  (c++)"miral::MirRunner::config_file[abi:cxx11]() const@MIRAL_2.4" 2.4.0
  (c++)"miral::MirRunner::display_config_file[abi:cxx11]() const@MIRAL_2.4" 2.4.0
  MIRAL_2.5@MIRAL_2.5 2.5.0
+ (c++)"miral::Output::id() const@MIRAL_2.5" 2.5.0
  (c++)"miral::WaylandExtensions::set_filter(std::function<bool (std::shared_ptr<mir::scene::Session> const&, char const*)> const&)@MIRAL_2.5" 2.5.0
  (c++)"miral::WaylandExtensions::add_extension(miral::WaylandExtensions::Builder const&)@MIRAL_2.5" 2.5.0
  (c++)"miral::WaylandExtensions::add_extension_disabled_by_default(miral::WaylandExtensions::Builder const&)@MIRAL_2.5" 2.5.0
