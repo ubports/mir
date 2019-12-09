@@ -831,6 +831,15 @@ void mgw::DisplayClient::for_each_display_sync_group(const std::function<void(Di
     }
 }
 
+void mgw::DisplayClient::for_each_output(std::function<void(DisplayConfigurationOutput&)> f)
+{
+    std::lock_guard<decltype(outputs_mutex)> lock{outputs_mutex};
+    for (auto& output : bound_outputs)
+    {
+        f(output.second->dcout);
+    }
+}
+
 mgw::WaylandDisplayConfiguration::WaylandDisplayConfiguration(std::vector<DisplayConfigurationOutput> && outputs) :
     outputs{outputs}
 {

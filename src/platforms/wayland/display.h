@@ -25,6 +25,8 @@
 #include <mir/graphics/display.h>
 #include <mir/graphics/display_report.h>
 #include <mir/renderer/gl/context_source.h>
+#include <mir/graphics/display_configuration.h>
+#include "mir/graphics/display_configuration_policy.h"
 
 #include <xkbcommon/xkbcommon.h>
 
@@ -59,7 +61,8 @@ public:
     Display(
         wl_display* const wl_display,
         std::shared_ptr<GLConfig> const& gl_config,
-        std::shared_ptr<DisplayReport> const& report);
+        std::shared_ptr<DisplayReport> const& report,
+	std::shared_ptr<DisplayConfigurationPolicy> const& initial_conf_policy);
 
     ~Display();
 

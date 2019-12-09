@@ -84,7 +84,8 @@ mgw::Display* the_display = nullptr;
 mgw::Display::Display(
     wl_display* const wl_display,
     std::shared_ptr<GLConfig> const& gl_config,
-    std::shared_ptr<DisplayReport> const& report) :
+    std::shared_ptr<DisplayReport> const& report,
+    std::shared_ptr<DisplayConfigurationPolicy> const& initial_conf_policy) :
     DisplayClient{wl_display, gl_config},
     report{report},
     shutdown_signal{::eventfd(0, EFD_CLOEXEC)},
@@ -96,6 +97,20 @@ mgw::Display::Display(
 
     std::lock_guard<decltype(the_display_mtx)> lock{the_display_mtx};
     the_display = this;
+
+    auto conf = configuration();
+    initial_conf_policy->apply_to(*conf.get());
+
+    DisplayClient::for_each_output(
+        [&](DisplayConfigurationOutput &output) {
+            conf->for_each_output(
+                [&](UserDisplayConfigurationOutput &newconf) {
+                    if (output.id == newconf.id) {
+                        output.scale = newconf.scale;
+                        output.form_factor = newconf.form_factor;
+                    }
+                });
+        });
 }
 
 auto mgw::Display::configuration() const -> std::unique_ptr<DisplayConfiguration>
