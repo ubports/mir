@@ -59,6 +59,7 @@ protected:
 
     auto display_configuration() const -> std::unique_ptr<DisplayConfiguration>;
     void for_each_display_sync_group(const std::function<void(DisplaySyncGroup&)>& f);
+    void for_each_output(std::function<void(DisplayConfigurationOutput&)> f);
 
     virtual void keyboard_keymap(wl_keyboard* keyboard, uint32_t format, int32_t fd, uint32_t size);
     virtual void keyboard_enter(wl_keyboard* keyboard, uint32_t serial, wl_surface* surface, wl_array* keys);
