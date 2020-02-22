@@ -223,6 +223,7 @@ private:
     uint64_t last_input_event_timestamp{0};
     MirEvent const* last_input_event{nullptr};
     miral::MRUWindowList mru_active_windows;
+    bool allow_active_window = true;
     std::set<Window> fullscreen_surfaces;
     std::set<Window> maximized_surfaces;
 
