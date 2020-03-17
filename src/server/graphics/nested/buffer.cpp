@@ -135,6 +135,14 @@ public:
             BOOST_THROW_EXCEPTION(std::logic_error("buffer cannot be used as texture"));
     }
 
+    ~PixelAndTextureAccess() {
+    	for(auto& it : egl_image_map)
+    	{
+            EGLDisplay disp = it.first.first;
+            extensions.eglDestroyImageKHR(disp, it.second);
+    	}
+    }
+
     void write(unsigned char const* pixels, size_t pixel_size) override
     {
         auto bpp = MIR_BYTES_PER_PIXEL(buffer.pixel_format());
@@ -167,11 +175,31 @@ public:
 
     void bind() override
     {
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexImage2D(
-            GL_TEXTURE_2D, 0, format,
-            buffer.size().width.as_int(), buffer.size().height.as_int(),
-            0, format, type, native_buffer->get_graphics_region()->vaddr);
+        using namespace std::chrono;
+        native_buffer->sync(mir_read, duration_cast<nanoseconds>(seconds(1)));
+
+        ImageResources resources
+        {
+            eglGetCurrentDisplay(),
+            eglGetCurrentContext()
+        };
+
+        EGLImageKHR image;
+        auto it = egl_image_map.find(resources);
+        if (it == egl_image_map.end())
+        {
+            auto hints = native_buffer->egl_image_creation_hints();
+            image = extensions.eglCreateImageKHR(
+                    resources.first, EGL_NO_CONTEXT,
+                    std::get<0>(hints), std::get<1>(hints), std::get<2>(hints));
+            egl_image_map[resources] = image;
+        }
+        else
+        {
+            image = it->second;
+        }
+
+        extensions.glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, image);
     }
 
     void gl_bind_to_texture() override
@@ -187,6 +215,9 @@ private:
     mgn::Buffer& buffer;
     std::shared_ptr<mgn::NativeBuffer> const native_buffer;
     geom::Stride const stride_;
+    typedef std::pair<EGLDisplay, EGLContext> ImageResources;
+    std::map<ImageResources, EGLImageKHR> egl_image_map;
+    mg::EGLExtensions extensions;
     GLenum format;
     GLenum type;
 };
