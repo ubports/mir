@@ -19,6 +19,7 @@
 #include "launch_app.h"
 
 #include <unistd.h>
+#include <signal.h>
 
 #include <stdexcept>
 #include <cstring>
@@ -39,6 +40,18 @@ auto miral::launch_app(
 
     if (pid == 0)
     {
+        {
+            // POSIX.1-2001 specifies that if the disposition of SIGCHLD is set to
+            // SIG_IGN or the SA_NOCLDWAIT flag is set for SIGCHLD, then children
+            // that terminate do not become zombie.
+            // We don't want any children to become zombies...
+            struct sigaction act;
+            act.sa_handler = SIG_IGN;
+            sigemptyset(&act.sa_mask);
+            act.sa_flags = SA_NOCLDWAIT;
+            sigaction(SIGCHLD, &act, NULL);
+        }
+
         if (mir_socket)
         {
             setenv("MIR_SOCKET", mir_socket.value().c_str(),  true);   // configure Mir socket
@@ -85,5 +98,3 @@ auto miral::launch_app(
 
     return pid;
 }
-
-
