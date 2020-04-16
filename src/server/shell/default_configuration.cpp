@@ -28,6 +28,7 @@
 #include "graphics_display_layout.h"
 #include "decoration/basic_manager.h"
 #include "decoration/basic_decoration.h"
+#include "decoration/null_manager.h"
 
 namespace ms = mir::scene;
 namespace msh = mir::shell;
@@ -69,20 +70,24 @@ auto mir::DefaultServerConfiguration::the_decoration_manager() -> std::shared_pt
     return decoration_manager(
         [this]()->std::shared_ptr<msd::Manager>
         {
-            return std::make_shared<msd::BasicManager>(
-                [buffer_allocator = the_buffer_allocator(),
-                 executor = the_main_loop(),
-                 cursor_images = the_cursor_images()](
-                    std::shared_ptr<shell::Shell> const& shell,
-                    std::shared_ptr<scene::Surface> const& surface) -> std::unique_ptr<msd::Decoration>
-                {
-                    return std::make_unique<msd::BasicDecoration>(
-                        shell,
-                        buffer_allocator,
-                        executor,
-                        cursor_images,
-                        surface);
-                });
+            bool const decor = getenv("MIR_DECOR");
+            if (!decor)
+                return std::make_shared<msd::NullManager>();
+            else
+                return std::make_shared<msd::BasicManager>(
+                    [buffer_allocator = the_buffer_allocator(),
+                     executor = the_main_loop(),
+                     cursor_images = the_cursor_images()](
+                        std::shared_ptr<shell::Shell> const& shell,
+                        std::shared_ptr<scene::Surface> const& surface) -> std::unique_ptr<msd::Decoration>
+                    {
+                        return std::make_unique<msd::BasicDecoration>(
+                            shell,
+                            buffer_allocator,
+                            executor,
+                            cursor_images,
+                            surface);
+                    });
         });
 }
 
