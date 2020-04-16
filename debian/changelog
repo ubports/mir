@@ -1,4 +1,15 @@
-mir (1.8.0) UNRELEASED; urgency=medium
+mir (1.8.1ubports1) xenial; urgency=medium
+
+  * Add 10bpp + 2bpp alpha RGBA pixel format to MirPixelFormat enum
+  * Increase max amount of data ints in MirBufferPackage
+  * Add envar to enable mirs own window decor
+  * Use drmModeGetResources as fallback for modeset probe
+  * Nested patchwork: Use eglImage for software buffers
+  * Temp fix for wrongly scaled buffers
+
+ -- Marius Gripsgard <marius@ubports.com>  Sun, 28 Mar 2021 00:17:05 +0100
+
+mir (1.8.0) xenial; urgency=medium
 
   * New upstream release 1.8.0
 
