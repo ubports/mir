@@ -237,14 +237,14 @@ mir::geometry::Rectangle extents_of(
     size_t current_mode_index,
     MirOrientation orientation,
     mir::geometry::Point top_left,
-    float scale)
+    float)
 {
     if (current_mode_index >= modes.size())
         return mir::geometry::Rectangle();
 
     mir::geometry::Size const size{
-        roundf(modes[current_mode_index].size.width.as_int() / scale),
-        roundf(modes[current_mode_index].size.height.as_int() / scale)};
+        roundf(modes[current_mode_index].size.width.as_int()),
+        roundf(modes[current_mode_index].size.height.as_int())};
 
     if (orientation == mir_orientation_normal ||
         orientation == mir_orientation_inverted)
