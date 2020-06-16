@@ -65,8 +65,7 @@ private:
     ScheduleMode schedule_mode;
     std::shared_ptr<Schedule> schedule;
     std::shared_ptr<MultiMonitorArbiter> const arbiter;
-    geometry::Size latest_buffer_size;
-    float scale_{1.0f};
+    geometry::Size size; 
     MirPixelFormat pf;
     bool first_frame_posted;
 
