@@ -60,6 +60,10 @@ struct mw::XdgWmBase::Thunks
         {
             me->destroy();
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "XdgWmBase::destroy()");
@@ -79,6 +83,10 @@ struct mw::XdgWmBase::Thunks
         try
         {
             me->create_positioner(id_resolved);
+        }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
         }
         catch(...)
         {
@@ -100,6 +108,10 @@ struct mw::XdgWmBase::Thunks
         {
             me->get_xdg_surface(id_resolved, surface);
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "XdgWmBase::get_xdg_surface()");
@@ -112,6 +124,10 @@ struct mw::XdgWmBase::Thunks
         try
         {
             me->pong(serial);
+        }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
         }
         catch(...)
         {
@@ -237,6 +253,10 @@ struct mw::XdgPositioner::Thunks
         {
             me->destroy();
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "XdgPositioner::destroy()");
@@ -249,6 +269,10 @@ struct mw::XdgPositioner::Thunks
         try
         {
             me->set_size(width, height);
+        }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
         }
         catch(...)
         {
@@ -263,6 +287,10 @@ struct mw::XdgPositioner::Thunks
         {
             me->set_anchor_rect(x, y, width, height);
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "XdgPositioner::set_anchor_rect()");
@@ -275,6 +303,10 @@ struct mw::XdgPositioner::Thunks
         try
         {
             me->set_anchor(anchor);
+        }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
         }
         catch(...)
         {
@@ -289,6 +321,10 @@ struct mw::XdgPositioner::Thunks
         {
             me->set_gravity(gravity);
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "XdgPositioner::set_gravity()");
@@ -302,6 +338,10 @@ struct mw::XdgPositioner::Thunks
         {
             me->set_constraint_adjustment(constraint_adjustment);
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "XdgPositioner::set_constraint_adjustment()");
@@ -314,6 +354,10 @@ struct mw::XdgPositioner::Thunks
         try
         {
             me->set_offset(x, y);
+        }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
         }
         catch(...)
         {
@@ -389,6 +433,10 @@ struct mw::XdgSurface::Thunks
         {
             me->destroy();
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "XdgSurface::destroy()");
@@ -408,6 +456,10 @@ struct mw::XdgSurface::Thunks
         try
         {
             me->get_toplevel(id_resolved);
+        }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
         }
         catch(...)
         {
@@ -434,6 +486,10 @@ struct mw::XdgSurface::Thunks
         {
             me->get_popup(id_resolved, parent_resolved, positioner);
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "XdgSurface::get_popup()");
@@ -447,6 +503,10 @@ struct mw::XdgSurface::Thunks
         {
             me->set_window_geometry(x, y, width, height);
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "XdgSurface::set_window_geometry()");
@@ -459,6 +519,10 @@ struct mw::XdgSurface::Thunks
         try
         {
             me->ack_configure(serial);
+        }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
         }
         catch(...)
         {
@@ -549,6 +613,10 @@ struct mw::XdgToplevel::Thunks
         {
             me->destroy();
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "XdgToplevel::destroy()");
@@ -567,6 +635,10 @@ struct mw::XdgToplevel::Thunks
         {
             me->set_parent(parent_resolved);
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "XdgToplevel::set_parent()");
@@ -579,6 +651,10 @@ struct mw::XdgToplevel::Thunks
         try
         {
             me->set_title(title);
+        }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
         }
         catch(...)
         {
@@ -593,6 +669,10 @@ struct mw::XdgToplevel::Thunks
         {
             me->set_app_id(app_id);
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "XdgToplevel::set_app_id()");
@@ -605,6 +685,10 @@ struct mw::XdgToplevel::Thunks
         try
         {
             me->show_window_menu(seat, serial, x, y);
+        }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
         }
         catch(...)
         {
@@ -619,6 +703,10 @@ struct mw::XdgToplevel::Thunks
         {
             me->move(seat, serial);
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "XdgToplevel::move()");
@@ -631,6 +719,10 @@ struct mw::XdgToplevel::Thunks
         try
         {
             me->resize(seat, serial, edges);
+        }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
         }
         catch(...)
         {
@@ -645,6 +737,10 @@ struct mw::XdgToplevel::Thunks
         {
             me->set_max_size(width, height);
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "XdgToplevel::set_max_size()");
@@ -657,6 +753,10 @@ struct mw::XdgToplevel::Thunks
         try
         {
             me->set_min_size(width, height);
+        }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
         }
         catch(...)
         {
@@ -671,6 +771,10 @@ struct mw::XdgToplevel::Thunks
         {
             me->set_maximized();
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "XdgToplevel::set_maximized()");
@@ -683,6 +787,10 @@ struct mw::XdgToplevel::Thunks
         try
         {
             me->unset_maximized();
+        }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
         }
         catch(...)
         {
@@ -702,6 +810,10 @@ struct mw::XdgToplevel::Thunks
         {
             me->set_fullscreen(output_resolved);
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "XdgToplevel::set_fullscreen()");
@@ -715,6 +827,10 @@ struct mw::XdgToplevel::Thunks
         {
             me->unset_fullscreen();
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "XdgToplevel::unset_fullscreen()");
@@ -727,6 +843,10 @@ struct mw::XdgToplevel::Thunks
         try
         {
             me->set_minimized();
+        }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
         }
         catch(...)
         {
@@ -857,6 +977,10 @@ struct mw::XdgPopup::Thunks
         {
             me->destroy();
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "XdgPopup::destroy()");
@@ -869,6 +993,10 @@ struct mw::XdgPopup::Thunks
         try
         {
             me->grab(seat, serial);
+        }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
         }
         catch(...)
         {

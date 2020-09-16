@@ -69,6 +69,10 @@ struct mw::LayerShellV1::Thunks
         {
             me->get_layer_surface(id_resolved, surface, output_resolved, layer, namespace_);
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "LayerShellV1::get_layer_surface()");
@@ -81,6 +85,10 @@ struct mw::LayerShellV1::Thunks
         try
         {
             me->destroy();
+        }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
         }
         catch(...)
         {
@@ -192,6 +200,10 @@ struct mw::LayerSurfaceV1::Thunks
         {
             me->set_size(width, height);
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "LayerSurfaceV1::set_size()");
@@ -204,6 +216,10 @@ struct mw::LayerSurfaceV1::Thunks
         try
         {
             me->set_anchor(anchor);
+        }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
         }
         catch(...)
         {
@@ -218,6 +234,10 @@ struct mw::LayerSurfaceV1::Thunks
         {
             me->set_exclusive_zone(zone);
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "LayerSurfaceV1::set_exclusive_zone()");
@@ -230,6 +250,10 @@ struct mw::LayerSurfaceV1::Thunks
         try
         {
             me->set_margin(top, right, bottom, left);
+        }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
         }
         catch(...)
         {
@@ -244,6 +268,10 @@ struct mw::LayerSurfaceV1::Thunks
         {
             me->set_keyboard_interactivity(keyboard_interactivity);
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "LayerSurfaceV1::set_keyboard_interactivity()");
@@ -256,6 +284,10 @@ struct mw::LayerSurfaceV1::Thunks
         try
         {
             me->get_popup(popup);
+        }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
         }
         catch(...)
         {
@@ -270,6 +302,10 @@ struct mw::LayerSurfaceV1::Thunks
         {
             me->ack_configure(serial);
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "LayerSurfaceV1::ack_configure()");
@@ -283,6 +319,10 @@ struct mw::LayerSurfaceV1::Thunks
         {
             me->destroy();
         }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
+        }
         catch(...)
         {
             internal_error_processing_request(client, "LayerSurfaceV1::destroy()");
@@ -295,6 +335,10 @@ struct mw::LayerSurfaceV1::Thunks
         try
         {
             me->set_layer(layer);
+        }
+        catch(ProtocolError const& err)
+        {
+            wl_resource_post_error(err.resource(), err.code(), "%s", err.message());
         }
         catch(...)
         {
