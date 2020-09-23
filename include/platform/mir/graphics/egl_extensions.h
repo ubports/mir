@@ -197,6 +197,14 @@ struct EGLExtensions
         PFNEGLCREATEPLATFORMWINDOWSURFACEEXTPROC const eglCreatePlatformWindowSurface;
     };
     std::experimental::optional<PlatformBaseEXT> const platform_base;
+
+    struct EXTImageDmaBufImportModifiers
+    {
+        EXTImageDmaBufImportModifiers(EGLDisplay dpy);
+
+        PFNEGLQUERYDMABUFFORMATSEXTPROC const eglQueryDmaBufFormatsExt;
+        PFNEGLQUERYDMABUFMODIFIERSEXTPROC const eglQueryDmaBufModifiersExt;
+    };
 };
 
 }

@@ -23,6 +23,7 @@ MIRPLATFORM_1.8 {
     mir::graphics::EGLExtensions::NVStreamAttribExtensions::NVStreamAttribExtensions*;
     mir::graphics::EGLExtensions::PlatformBaseEXT*;
     mir::graphics::EGLExtensions::WaylandExtensions::WaylandExtensions*;
+    mir::graphics::EGLExtensions::EXTImageDmaBufImportModifiers::EXTImageDmaBufImportModifiers*;
     mir::graphics::EventHandlerRegister::?EventHandlerRegister*;
     mir::graphics::EventHandlerRegister::EventHandlerRegister*;
     mir::graphics::EventHandlerRegister::operator*;
