@@ -23,6 +23,7 @@ set(
   program_factory.cpp
   ${PROJECT_SOURCE_DIR}/include/platform/mir/graphics/egl_wayland_allocator.h
   egl_wayland_allocator.cpp
+  ${PROJECT_SOURCE_DIR}/include/platform/mir/graphics/dmabuf_buffer.h
 )
 
 add_library(mirplatformgraphicscommon OBJECT
