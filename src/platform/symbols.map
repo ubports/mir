@@ -165,6 +165,9 @@ MIRPLATFORM_1.8 {
     mir::graphics::green_channel_depth*;
     mir::graphics::red_channel_depth*;
     mir::graphics::tessellate_renderable_into_rectangle*;
+    mir::graphics::LinuxDmaBufUnstable::LinuxDmaBufUnstable*;
+    mir::graphics::LinuxDmaBufUnstable::?LinuxDmaBufUnstable*;
+    mir::graphics::LinuxDmaBufUnstable::buffer_from_resource*;
     mir::udev::Context::?Context*;
     mir::udev::Context::Context*;
     mir::udev::Context::ctx*;

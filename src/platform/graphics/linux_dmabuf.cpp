@@ -17,7 +17,8 @@
  */
 
 
-#include "linux_dmabuf.h"
+#include "mir/graphics/linux_dmabuf.h"
+
 
 #include "wayland_wrapper.h"
 #include "mir/graphics/egl_extensions.h"
@@ -27,6 +28,7 @@
 #include "mir/graphics/program_factory.h"
 #include "mir/graphics/buffer.h"
 #include "mir/graphics/buffer_basic.h"
+#include "mir/graphics/dmabuf_buffer.h"
 #include "mir/executor.h"
 
 #define MIR_LOG_COMPONENT "linux-dmabuf-import"
@@ -36,35 +38,29 @@
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 
-#include <boost/range/combine.hpp>
 #include <mutex>
 #include <vector>
 #include <drm_fourcc.h>
 #include <wayland-server.h>
+#include <libdrm/drm_fourcc.h>
 
 namespace mg = mir::graphics;
-namespace mgg = mir::graphics::gbm;
 namespace mw = mir::wayland;
 namespace geom = mir::geometry;
 
 namespace
 {
-struct PlaneInfo
-{
-    mir::Fd fd;
-    uint32_t offset;
-    uint32_t stride;
-};
+using PlaneInfo = mg::DMABufBuffer::PlaneDescriptor;
 
 /**
  * Holds on to all imported dmabuf buffers, and allows looking up by wl_buffer
  *
  * \note This is not threadsafe, and should only be accessed on the Wayland thread
  */
-class DmaBufBuffer : public mir::wayland::Buffer
+class WlDmaBufBuffer : public mir::wayland::Buffer
 {
 public:
-    DmaBufBuffer(
+    WlDmaBufBuffer(
         EGLDisplay dpy,
         std::shared_ptr<mg::EGLExtensions> egl_extensions,
         wl_resource* wl_buffer,
@@ -72,7 +68,7 @@ public:
         int32_t height,
         uint32_t format,
         uint32_t flags,
-        std::optional<uint64_t> modifier,
+        uint64_t modifier,
         std::vector<PlaneInfo> plane_params)
             : Buffer(wl_buffer, Version<1>{}),
               dpy{dpy},
@@ -81,14 +77,14 @@ public:
               height{height},
               format_{format},
               flags{flags},
-              modifier{modifier},
-              planes{std::move(plane_params)},
+              modifier_{modifier},
+              planes_{std::move(plane_params)},
               image{EGL_NO_IMAGE_KHR}
     {
         reimport_egl_image();
     }
 
-    ~DmaBufBuffer()
+    ~WlDmaBufBuffer()
     {
         if (image != EGL_NO_IMAGE_KHR)
         {
@@ -96,9 +92,9 @@ public:
         }
     }
 
-    static auto maybe_dmabuf_from_wl_buffer(wl_resource* buffer) -> DmaBufBuffer*
+    static auto maybe_dmabuf_from_wl_buffer(wl_resource* buffer) -> WlDmaBufBuffer*
     {
-        return dynamic_cast<DmaBufBuffer*>(Buffer::from(buffer));
+        return dynamic_cast<WlDmaBufBuffer*>(Buffer::from(buffer));
     }
 
     auto size() -> geom::Size
@@ -142,23 +138,23 @@ public:
         attributes.push_back(EGL_LINUX_DRM_FOURCC_EXT);
         attributes.push_back(format());
 
-        for(auto i = 0u; i < planes.size(); ++i)
+        for(auto i = 0u; i < planes_.size(); ++i)
         {
             auto const& attrib_names = egl_attribs[i];
-            auto const& plane = planes[i];
+            auto const& plane = planes()[i];
 
             attributes.push_back(attrib_names.fd);
-            attributes.push_back(static_cast<int>(plane.fd));
+            attributes.push_back(static_cast<int>(plane.dma_buf));
             attributes.push_back(attrib_names.offset);
             attributes.push_back(plane.offset);
             attributes.push_back(attrib_names.pitch);
             attributes.push_back(plane.stride);
-            if (modifier.value_or(DRM_FORMAT_MOD_INVALID) != DRM_FORMAT_MOD_INVALID)
+            if (modifier() != DRM_FORMAT_MOD_INVALID)
             {
                 attributes.push_back(attrib_names.modifier_lo);
-                attributes.push_back(*modifier & 0xFFFFFFFF);
+                attributes.push_back(modifier() & 0xFFFFFFFF);
                 attributes.push_back(attrib_names.modifier_hi);
-                attributes.push_back(*modifier >> 32);
+                attributes.push_back(modifier() >> 32);
             }
         }
         attributes.push_back(EGL_NONE);
@@ -175,13 +171,23 @@ public:
 
         if (image == EGL_NO_IMAGE_KHR)
         {
-            auto const msg = planes.size() > 1 ?
+            auto const msg = planes_.size() > 1 ?
                 "Failed to import supplied dmabufs" :
                 "Failed to import supplied dmabuf";
             BOOST_THROW_EXCEPTION((mg::egl_error(msg)));
         }
 
         return image;
+    }
+
+    auto modifier() -> uint64_t
+    {
+        return modifier_;
+    }
+
+    auto planes() -> std::vector<PlaneInfo> const&
+    {
+        return planes_;
     }
 private:
     void destroy() override
@@ -193,10 +199,9 @@ private:
     std::shared_ptr<mg::EGLExtensions> const egl_extensions;
     int32_t const width, height;
     uint32_t const format_;
-    [[maybe_unused]]
     uint32_t const flags;
-    std::optional<uint64_t> const modifier;
-    std::vector<PlaneInfo> planes;
+    uint64_t const modifier_;
+    std::vector<PlaneInfo> const planes_;
     EGLImageKHR image;
 
     struct EGLPlaneAttribs
@@ -293,7 +298,7 @@ private:
                     "Plane index %u higher than maximum number of planes, %zu", plane_idx, planes.size()}));
         }
 
-        if (planes[plane_idx].fd != mir::Fd::invalid)
+        if (planes[plane_idx].dma_buf != mir::Fd::invalid)
         {
             BOOST_THROW_EXCEPTION((
                 mw::ProtocolError{
@@ -302,7 +307,7 @@ private:
                     "Plane %u already has a dmabuf", plane_idx}));
         }
 
-        planes[plane_idx].fd = std::move(fd);
+        planes[plane_idx].dma_buf = std::move(fd);
         planes[plane_idx].offset = offset;
         planes[plane_idx].stride = stride;
 
@@ -354,7 +359,7 @@ private:
             std::count_if(
                 planes.begin(),
                 planes.end(),
-                [](auto const& plane) { return plane.fd != mir::Fd::invalid; });
+                [](auto const& plane) { return plane.dma_buf != mir::Fd::invalid; });
         if (plane_count == 0)
         {
             BOOST_THROW_EXCEPTION((
@@ -363,9 +368,9 @@ private:
                     Error::incomplete,
                     "No dmabuf has been added to the params"}));
         }
-        for (auto i = 0u; i < plane_count; ++i)
+        for (auto i = 0; i != plane_count; ++i)
         {
-            if (planes[i].fd == mir::Fd::invalid)
+            if (planes[i].dma_buf == mir::Fd::invalid)
             {
                 BOOST_THROW_EXCEPTION((
                     mw::ProtocolError{
@@ -406,7 +411,7 @@ private:
                 wl_client_post_no_memory(client);
                 return;
             }
-            new DmaBufBuffer{
+            new WlDmaBufBuffer{
                 dpy,
                 egl_extensions,
                 buffer_resource,
@@ -414,7 +419,7 @@ private:
                 height,
                 format,
                 flags,
-                modifier,
+                modifier.value_or(DRM_FORMAT_MOD_INVALID),
                 {planes.cbegin(), validate_and_count_planes()}};
             send_created_event(buffer_resource);
         }
@@ -445,7 +450,7 @@ private:
 
         try
         {
-            new DmaBufBuffer{
+            new WlDmaBufBuffer{
                 dpy,
                 egl_extensions,
                 buffer_id,
@@ -453,7 +458,7 @@ private:
                 height,
                 format,
                 flags,
-                modifier,
+                modifier.value_or(DRM_FORMAT_MOD_INVALID),
                 {planes.cbegin(), validate_and_count_planes()}};
         }
         catch (std::system_error const& err)
@@ -514,13 +519,13 @@ bool drm_format_has_alpha(uint32_t format)
 
 class WaylandDmabufTexBuffer :
     public mg::BufferBasic,
-    public mg::NativeBufferBase,
-    public mg::gl::Texture
+    public mg::gl::Texture,
+    public mg::DMABufBuffer
 {
 public:
     // Note: Must be called with a current EGL context
     WaylandDmabufTexBuffer(
-        DmaBufBuffer& source,
+        WlDmaBufBuffer& source,
         mg::EGLExtensions const& extensions,
         std::shared_ptr<mir::renderer::gl::Context> ctx,
         std::function<void()>&& on_consumed,
@@ -533,6 +538,9 @@ public:
           size_{source.size()},
           layout_{source.layout()},
           has_alpha{drm_format_has_alpha(source.format())},
+          planes_{source.planes()},
+          modifier_{source.modifier()},
+          fourcc{source.format()},
           wayland_executor{std::move(wayland_executor)}
     {
         eglBindAPI(EGL_OPENGL_ES_API);
@@ -621,6 +629,22 @@ public:
     void add_syncpoint() override
     {
     }
+
+    auto drm_fourcc() const -> uint32_t override
+    {
+        return fourcc;
+    }
+
+    auto modifier() const -> std::optional<uint64_t> override
+    {
+        return modifier_;
+    }
+
+    auto planes() const -> std::vector<PlaneDescriptor> const& override
+    {
+        return planes_;
+    }
+
 private:
     std::shared_ptr<mir::renderer::gl::Context> const ctx;
     GLuint const tex;
@@ -632,6 +656,10 @@ private:
     geom::Size const size_;
     Layout const layout_;
     bool const has_alpha;
+
+    std::vector<mg::DMABufBuffer::PlaneDescriptor> const planes_;
+    std::optional<uint64_t> const modifier_;
+    uint32_t const fourcc;
 
     std::shared_ptr<mir::Executor> const wayland_executor;
 };
@@ -684,17 +712,12 @@ bool format_is_simple_enough_for_us(uint32_t format)
     }
 }
 
-class mgg::LinuxDmaBufUnstable::Instance : public mir::wayland::LinuxDmabufV1
+class mg::DmaBufFormatDescriptors
 {
 public:
-    Instance(
-        wl_resource* new_resource,
+    DmaBufFormatDescriptors(
         EGLDisplay dpy,
-        std::shared_ptr<EGLExtensions> egl_extensions,
-        EGLExtensions::EXTImageDmaBufImportModifiers const& dmabuf_ext)
-        : mir::wayland::LinuxDmabufV1(new_resource, Version<3>{}),
-          dpy{dpy},
-          egl_extensions{std::move(egl_extensions)}
+        mg::EGLExtensions::EXTImageDmaBufImportModifiers const& dmabuf_ext)
     {
         EGLint num_formats;
         if (dmabuf_ext.eglQueryDmaBufFormatsExt(dpy, 0, nullptr, &num_formats) != EGL_TRUE)
@@ -705,26 +728,27 @@ public:
         {
             BOOST_THROW_EXCEPTION((std::runtime_error{"No dma-buf formats supported"}));
         }
-        DmaBufFormatDescriptors format_descriptors;
+        resize(num_formats);
+
         EGLint returned_formats;
-        format_descriptors.format.resize(num_formats);
-        format_descriptors.modifiers.resize(num_formats);
-        format_descriptors.external_only.resize(num_formats);
         if (dmabuf_ext.eglQueryDmaBufFormatsExt(
-                dpy, num_formats, format_descriptors.format.data(), &returned_formats) != EGL_TRUE)
+            dpy, formats.size(), formats.data(), &returned_formats) != EGL_TRUE)
         {
             BOOST_THROW_EXCEPTION((mg::egl_error("Failed to list dma-buf formats")));
         }
         // Paranoia: what if the EGL returns a different number of formats in the second call?
-        format_descriptors.format.resize(returned_formats);
-        format_descriptors.modifiers.resize(returned_formats);
-        format_descriptors.external_only.resize(returned_formats);
-
-        for (auto i = 0u; i < format_descriptors.format.size(); ++i)
+        if (returned_formats != num_formats)
         {
-            auto const& format = format_descriptors.format[i];
-            auto& modifiers = format_descriptors.modifiers[i];
-            auto& external_only = format_descriptors.external_only[i];
+            mir::log_warning(
+                "eglQueryDmaBufFormats returned unexpected number of formats (got %i, expected %i)",
+                returned_formats,
+                num_formats);
+            resize(returned_formats);
+        }
+
+        for (auto i = 0u; i < formats.size(); ++i)
+        {
+            auto [format, modifiers, external_only] = (*this)[i];
 
             EGLint num_modifiers;
             if (
@@ -753,15 +777,100 @@ public:
             {
                 BOOST_THROW_EXCEPTION((mg::egl_error("Failed to list modifiers")));
             }
-            modifiers.resize(returned_modifiers);
-            external_only.resize(returned_modifiers);
+            if (returned_modifiers != num_modifiers)
+            {
+                mir::log_warning(
+                    "eglQueryDmaBufModifiers return unexpected number of modifiers for format 0x%ux"
+                    " (expected %i, got %i)",
+                    format,
+                    returned_modifiers,
+                    num_modifiers);
+                modifiers.resize(returned_modifiers);
+                external_only.resize(returned_modifiers);
+            }
+
+            if (num_modifiers == 0)
+            {
+                /* Special case: num_modifiers == 0 means that the driver doesn't support modifiers;
+                 * instead, it will do the right thing if you publish DRM_FORMAT_MOD_INVALID.
+                 */
+                modifiers.push_back(DRM_FORMAT_MOD_INVALID);
+                external_only.push_back(false);
+            }
+        }
+    }
+
+    struct FormatDescriptor
+    {
+        EGLint format;
+        std::vector<EGLuint64KHR> const& modifiers;
+        std::vector<EGLBoolean> const& external_only;
+    };
+
+    auto num_formats() const -> size_t
+    {
+        return formats.size();
+    }
+
+    auto operator[](size_t idx) const -> FormatDescriptor
+    {
+        if (idx >= formats.size())
+        {
+            BOOST_THROW_EXCEPTION((std::out_of_range{
+                std::string("Index ") + std::to_string(idx) + " out of bounds (num formats: " +
+                std::to_string(formats.size()) + ")"}));
         }
 
-        for (auto i = 0u; i < format_descriptors.format.size(); ++i)
+        return FormatDescriptor{
+            formats[idx],
+            modifiers_for_format[idx],
+            external_only_for_format[idx]};
+    }
+
+
+private:
+    void resize(size_t size)
+    {
+        formats.resize(size);
+        modifiers_for_format.resize(size);
+        external_only_for_format.resize(size);
+    }
+
+    auto operator[](size_t idx)
+        -> std::tuple<EGLint, std::vector<EGLuint64KHR>&, std::vector<EGLBoolean>&>
+    {
+        if (idx >= formats.size())
         {
-            auto const& format = format_descriptors.format[i];
-            auto const& modifiers = format_descriptors.modifiers[i];
-            auto const& external_onlys = format_descriptors.external_only[i];
+            BOOST_THROW_EXCEPTION((std::out_of_range{
+                std::string("Index ") + std::to_string(idx) + " out of bounds (num formats: " +
+                std::to_string(formats.size()) + ")"}));
+        }
+        return std::make_tuple(
+            formats[idx],
+            std::ref(modifiers_for_format[idx]),
+            std::ref(external_only_for_format[idx]));
+    }
+
+    std::vector<EGLint> formats;
+    std::vector<std::vector<EGLuint64KHR>> modifiers_for_format;
+    std::vector<std::vector<EGLBoolean>> external_only_for_format;
+};
+
+class mg::LinuxDmaBufUnstable::Instance : public mir::wayland::LinuxDmabufV1
+{
+public:
+    Instance(
+        wl_resource* new_resource,
+        EGLDisplay dpy,
+        std::shared_ptr<EGLExtensions> egl_extensions,
+        DmaBufFormatDescriptors const& formats)
+        : mir::wayland::LinuxDmabufV1(new_resource, Version<3>{}),
+          dpy{dpy},
+          egl_extensions{std::move(egl_extensions)}
+    {
+        for (auto i = 0u; i < formats.num_formats(); ++i)
+        {
+            auto [format, modifiers, external_only] = formats[i];
 
             if (format_is_simple_enough_for_us(format))
             {
@@ -770,9 +879,9 @@ public:
                 {
                     for (auto j = 0u; j < modifiers.size(); ++j)
                     {
-                        auto const& modifier = modifiers[i];
-                        auto const& external_only = external_onlys[i];
-                        if (external_only == EGL_FALSE)
+                        auto const modifier = modifiers[j];
+                        auto const external = external_only[j];
+                        if (external == EGL_FALSE)
                         {
                             // We can't (currently) handle external images
                             send_modifier_event(
@@ -796,30 +905,23 @@ private:
         new LinuxDmaBufParams{params_id, dpy, egl_extensions};
     }
 
-    struct DmaBufFormatDescriptors
-    {
-        std::vector<EGLint> format;
-        std::vector<std::vector<EGLuint64KHR>> modifiers;
-        std::vector<std::vector<EGLBoolean>> external_only;
-    };
-
     EGLDisplay const dpy;
     std::shared_ptr<EGLExtensions> const egl_extensions;
 };
 
-mgg::LinuxDmaBufUnstable::LinuxDmaBufUnstable(
+mg::LinuxDmaBufUnstable::LinuxDmaBufUnstable(
     wl_display* display,
     EGLDisplay dpy,
     std::shared_ptr<EGLExtensions> egl_extensions,
-    EGLExtensions::EXTImageDmaBufImportModifiers dmabuf_ext)
+    EGLExtensions::EXTImageDmaBufImportModifiers const& dmabuf_ext)
     : mir::wayland::LinuxDmabufV1::Global(display, Version<3>{}),
       dpy{dpy},
       egl_extensions{std::move(egl_extensions)},
-      dmabuf_ext{std::move(dmabuf_ext)}
+      formats{std::make_shared<DmaBufFormatDescriptors>(dpy, dmabuf_ext)}
 {
 }
 
-auto mgg::LinuxDmaBufUnstable::buffer_from_resource(
+auto mg::LinuxDmaBufUnstable::buffer_from_resource(
     wl_resource* buffer,
     std::shared_ptr<renderer::gl::Context> ctx,
     std::function<void()>&& on_consumed,
@@ -827,7 +929,7 @@ auto mgg::LinuxDmaBufUnstable::buffer_from_resource(
     std::shared_ptr<Executor> wayland_executor)
     -> std::shared_ptr<Buffer>
 {
-    if (auto dmabuf = DmaBufBuffer::maybe_dmabuf_from_wl_buffer(buffer))
+    if (auto dmabuf = WlDmaBufBuffer::maybe_dmabuf_from_wl_buffer(buffer))
     {
         return std::make_shared<WaylandDmabufTexBuffer>(
             *dmabuf,
@@ -840,7 +942,7 @@ auto mgg::LinuxDmaBufUnstable::buffer_from_resource(
     return nullptr;
 }
 
-void mgg::LinuxDmaBufUnstable::bind(wl_resource* new_resource)
+void mg::LinuxDmaBufUnstable::bind(wl_resource* new_resource)
 {
-    new LinuxDmaBufUnstable::Instance{new_resource, dpy, egl_extensions, dmabuf_ext};
+    new LinuxDmaBufUnstable::Instance{new_resource, dpy, egl_extensions, *formats};
 }

@@ -47,8 +47,8 @@ add_library(
 
 target_link_libraries(
   mirplatformgraphicsmesakmsobjects
-  PUBLIC
-    mirsharedmesaservercommon-static
+
+  mirsharedmesaservercommon-static
 )
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/symbols.map.in
@@ -58,22 +58,23 @@ set(symbol_map ${CMAKE_CURRENT_BINARY_DIR}/symbols.map)
 
 add_library(mirplatformgraphicsmesakms MODULE
   platform_symbols.cpp
-  $<TARGET_OBJECTS:mirplatformgraphicsmesakmsobjects>
 )
 
 target_link_libraries(
   mirplatformgraphicsmesakms
+
   PRIVATE
-  mirplatform
-  mirsharedmesaservercommon-static
-  ${Boost_PROGRAM_OPTIONS_LIBRARY}
-  ${Boost_IOSTREAMS_LIBRARY}
-  ${Boost_THREAD_LIBRARY}
-  ${DRM_LDFLAGS} ${DRM_LIBRARIES}
-  ${GBM_LDFLAGS} ${GBM_LIBRARIES}
-  ${EGL_LDFLAGS} ${EGL_LIBRARIES}
-  ${GL_LDFLAGS} ${GL_LIBRARIES}
-  ${WAYLAND_SERVER_LDFLAGS} ${WAYLAND_SERVER_LIBRARIES}
+    mirplatform
+    mirplatformgraphicsmesakmsobjects
+    mirsharedmesaservercommon-static
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${Boost_IOSTREAMS_LIBRARY}
+    ${Boost_THREAD_LIBRARY}
+    ${DRM_LDFLAGS} ${DRM_LIBRARIES}
+    ${GBM_LDFLAGS} ${GBM_LIBRARIES}
+    ${EGL_LDFLAGS} ${EGL_LIBRARIES}
+    ${GL_LDFLAGS} ${GL_LIBRARIES}
+    ${WAYLAND_SERVER_LDFLAGS} ${WAYLAND_SERVER_LIBRARIES}
 )
 
 set_target_properties(

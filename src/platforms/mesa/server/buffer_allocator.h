@@ -24,7 +24,7 @@
 #include "mir/graphics/buffer_id.h"
 #include "mir/graphics/wayland_allocator.h"
 #include "mir_toolkit/mir_native_buffer.h"
-#include "linux_dmabuf.h"
+#include "mir/graphics/linux_dmabuf.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic warning "-Wall"
