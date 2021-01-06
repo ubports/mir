@@ -20,7 +20,7 @@
 #ifndef MIR_CLIENT_MIR_NATIVE_BUFFER_H_
 #define MIR_CLIENT_MIR_NATIVE_BUFFER_H_
 
-enum { mir_buffer_package_max = 30 };
+enum { mir_buffer_package_max = 128 };
 
 typedef enum
 {
