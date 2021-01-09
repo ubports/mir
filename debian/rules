@@ -100,7 +100,7 @@ endif
 
 # Don't try to strip libraries used as test data
 override_dh_strip:
-	dh_strip -Xmir-test-data
+	dh_strip -Xmir-test-data --no-debs
 
 # Don't try to find dependencies of libraries used as test data
 override_dh_shlibdeps:
