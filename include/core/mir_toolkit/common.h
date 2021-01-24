@@ -253,6 +253,7 @@ typedef enum MirPixelFormat
     mir_pixel_format_rgb_565 = 7,
     mir_pixel_format_rgba_5551 = 8,
     mir_pixel_format_rgba_4444 = 9,
+    mir_pixel_format_rgba_10101002 = 10,
     /*
      * TODO: Big endian support would require additional formats in order to
      *       composite software surfaces using OpenGL (GL_RGBA/GL_BGRA_EXT):
