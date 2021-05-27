@@ -139,7 +139,7 @@ std::unique_ptr<mir::renderer::gl::Context> mgn::detail::EGLDisplayHandle::creat
        EGL_RENDERABLE_TYPE, MIR_SERVER_EGL_OPENGL_BIT,
        EGL_NONE
     };
-    return std::make_unique<SurfacelessEGLContext>(egl_display, attribs, EGL_NO_CONTEXT);
+    return std::make_unique<SurfacelessEGLContext>(egl_display, attribs, egl_context_);
 }
 
 mgn::detail::EGLDisplayHandle::~EGLDisplayHandle() noexcept
