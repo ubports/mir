@@ -24,6 +24,7 @@
 #include "ipc_operations.h"
 #include "mir/shared_library.h"
 #include "mir/graphics/graphic_buffer_allocator.h"
+#include "mir/graphics/wayland_allocator.h"
 #include "mir/graphics/display.h"
 #include "mir/graphics/platform_ipc_operations.h"
 #include "mir/options/option.h"
@@ -64,7 +65,7 @@ mgn::NestedBufferPlatform::NestedBufferPlatform(
 
 namespace
 {
-class BufferAllocator : public mg::GraphicBufferAllocator
+class BufferAllocator : public mg::GraphicBufferAllocator, public mg::WaylandAllocator
 {
 public:
     BufferAllocator(
@@ -100,6 +101,27 @@ public:
     std::vector<MirPixelFormat> supported_pixel_formats() override
     {
         return guest_allocator->supported_pixel_formats();
+    }
+
+    // WaylandAllocator
+    void bind_display(wl_display* display, std::shared_ptr<mir::Executor> wayland_executor) override
+    {
+        if (auto allocator = std::dynamic_pointer_cast<mg::WaylandAllocator>(guest_allocator))
+        {
+            allocator->bind_display(display, std::move(wayland_executor));
+        }
+    }
+
+    std::shared_ptr<mg::Buffer> buffer_from_resource(
+        wl_resource* buffer,
+        std::function<void()>&& on_consumed,
+        std::function<void()>&& on_release) override
+    {
+        if (auto allocator = std::dynamic_pointer_cast<mg::WaylandAllocator>(guest_allocator))
+        {
+            return allocator->buffer_from_resource(buffer, std::move(on_consumed), std::move(on_release));
+        }
+        return nullptr;
     }
 
 private:
