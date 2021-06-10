@@ -12,6 +12,9 @@ include_directories(
     ${WAYLAND_SERVER_INCLUDE_DIRS}
     ${UDEV_INCLUDE_DIRS}
     ${PROJECT_SOURCE_DIR}/include/client
+    ${CMAKE_CURRENT_BINARY_DIR}/../
+    ${PROJECT_SOURCE_DIR}/include/wayland
+    ${CMAKE_CURRENT_BINARY_DIR}/../../../../platform/graphics/
 )
 
 # gbm.h and drm.h have trailing commas at the end of enum definitions
@@ -45,11 +48,7 @@ add_library(
   mutex.h
 )
 
-target_link_libraries(
-  mirplatformgraphicsmesakmsobjects
-
-  mirsharedmesaservercommon-static
-)
+add_dependencies(mirplatformgraphicsmesakmsobjects mirsharedmesaservercommon-static)
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/symbols.map.in
     ${CMAKE_CURRENT_BINARY_DIR}/symbols.map
@@ -58,14 +57,15 @@ set(symbol_map ${CMAKE_CURRENT_BINARY_DIR}/symbols.map)
 
 add_library(mirplatformgraphicsmesakms MODULE
   platform_symbols.cpp
+  $<TARGET_OBJECTS:mirplatformgraphicsmesakmsobjects>
 )
+add_dependencies(mirplatformgraphicsmesakms mirplatform)
 
 target_link_libraries(
   mirplatformgraphicsmesakms
 
   PRIVATE
     mirplatform
-    mirplatformgraphicsmesakmsobjects
     mirsharedmesaservercommon-static
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_IOSTREAMS_LIBRARY}

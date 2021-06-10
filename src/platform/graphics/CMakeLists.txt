@@ -115,15 +115,11 @@ target_include_directories(
     ${GL_INCLUDE_DIRS}
     ${DRM_INCLUDE_DIRS}
     ${PROJECT_SOURCE_DIR}/include/renderers/gl
+    ${PROJECT_SOURCE_DIR}/include/wayland
+    ${PROJECT_SOURCE_DIR}/src/wayland/generated
 )
 
-target_link_libraries(
-  mirplatformgraphicscommon
-
-  PUBLIC
-    mirwayland
-  PRIVATE
-    mircommon
-)
+set_target_properties(mirplatformgraphicscommon PROPERTIES INTERFACE_LINK_LIBRARIES mircommon)
+add_dependencies(mirplatformgraphicscommon mirwayland)
 
 set(symbol_map ${CMAKE_CURRENT_SOURCE_DIR}/symbols.map)

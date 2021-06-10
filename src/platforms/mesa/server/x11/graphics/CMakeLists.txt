@@ -3,6 +3,8 @@ include_directories(
   ${PROJECT_SOURCE_DIR}/include/platform
   ${PROJECT_SOURCE_DIR}/include/client
   ../..
+  ${CMAKE_CURRENT_BINARY_DIR}/../../../../../platform/graphics/
+  ${PROJECT_SOURCE_DIR}/include/wayland
 )
 
 include_directories(
@@ -21,9 +23,11 @@ add_library(
   display_buffer.cpp
   egl_helper.cpp
 )
+add_dependencies(mirplatformgraphicsmesax11objects mirplatform)
 
 add_library(
   mirplatformgraphicsmesax11objects-symbols OBJECT
 
   graphics.cpp
 )
+add_dependencies(mirplatformgraphicsmesax11objects-symbols mirplatform)

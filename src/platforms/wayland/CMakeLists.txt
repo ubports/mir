@@ -26,6 +26,8 @@ PUBLIC
     ${EPOXY_INCLUDE_DIRS}
     ${WAYLAND_CLIENT_INCLUDE_DIRS}
     ${WAYLAND_EGL_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_BINARY_DIR}/../../platform/graphics/
+    ${PROJECT_SOURCE_DIR}/include/wayland
 )
 
 target_link_libraries(mirplatformwayland-graphics
