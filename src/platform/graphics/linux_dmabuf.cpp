@@ -43,6 +43,9 @@
 #include <drm_fourcc.h>
 #include <wayland-server.h>
 
+#include <boost/exception/errinfo_errno.hpp>
+#include <boost/throw_exception.hpp>
+
 namespace mg = mir::graphics;
 namespace mw = mir::wayland;
 namespace geom = mir::geometry;
@@ -227,7 +230,13 @@ public:
 
         for (auto i = 0u; i < formats.size(); ++i)
         {
-            auto [format, modifiers, external_only] = (*this)[i];
+            EGLint format;
+            std::vector<EGLuint64KHR> *modifiers_ptr;
+            std::vector<EGLBoolean> *external_only_ptr;
+            std::tie(format, modifiers_ptr, external_only_ptr) = (*this)[i];
+
+            auto &modifiers = *modifiers_ptr;
+            auto &external_only = *external_only_ptr;
 
             EGLint num_modifiers;
             if (
@@ -316,7 +325,7 @@ private:
     }
 
     auto operator[](size_t idx)
-        -> std::tuple<EGLint, std::vector<EGLuint64KHR>&, std::vector<EGLBoolean>&>
+        -> std::tuple<EGLint, std::vector<EGLuint64KHR>*, std::vector<EGLBoolean>*>
     {
         if (idx >= formats.size())
         {
@@ -326,8 +335,8 @@ private:
         }
         return std::make_tuple(
             formats[idx],
-            std::ref(modifiers_for_format[idx]),
-            std::ref(external_only_for_format[idx]));
+            &(modifiers_for_format[idx]),
+            &(external_only_for_format[idx]));
     }
 
     std::vector<EGLint> formats;
@@ -536,37 +545,39 @@ private:
         EGLint modifier_lo;
         EGLint modifier_hi;
     };
-    static constexpr std::array<EGLPlaneAttribs, 4> egl_attribs = {
-        EGLPlaneAttribs {
-            EGL_DMA_BUF_PLANE0_FD_EXT,
-            EGL_DMA_BUF_PLANE0_OFFSET_EXT,
-            EGL_DMA_BUF_PLANE0_PITCH_EXT,
-            EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT,
-            EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT
-        },
-        EGLPlaneAttribs {
-            EGL_DMA_BUF_PLANE1_FD_EXT,
-            EGL_DMA_BUF_PLANE1_OFFSET_EXT,
-            EGL_DMA_BUF_PLANE1_PITCH_EXT,
-            EGL_DMA_BUF_PLANE1_MODIFIER_LO_EXT,
-            EGL_DMA_BUF_PLANE1_MODIFIER_HI_EXT
-        },
-        EGLPlaneAttribs {
-            EGL_DMA_BUF_PLANE2_FD_EXT,
-            EGL_DMA_BUF_PLANE2_OFFSET_EXT,
-            EGL_DMA_BUF_PLANE2_PITCH_EXT,
-            EGL_DMA_BUF_PLANE2_MODIFIER_LO_EXT,
-            EGL_DMA_BUF_PLANE2_MODIFIER_HI_EXT
-        },
-        EGLPlaneAttribs {
-            EGL_DMA_BUF_PLANE3_FD_EXT,
-            EGL_DMA_BUF_PLANE3_OFFSET_EXT,
-            EGL_DMA_BUF_PLANE3_PITCH_EXT,
-            EGL_DMA_BUF_PLANE3_MODIFIER_LO_EXT,
-            EGL_DMA_BUF_PLANE3_MODIFIER_HI_EXT
-        }
-    };
+    static std::array<EGLPlaneAttribs, 4> egl_attribs;
 };
+
+std::array<WlDmaBufBuffer::EGLPlaneAttribs, 4> WlDmaBufBuffer::egl_attribs = {{
+    WlDmaBufBuffer::EGLPlaneAttribs {
+        EGL_DMA_BUF_PLANE0_FD_EXT,
+        EGL_DMA_BUF_PLANE0_OFFSET_EXT,
+        EGL_DMA_BUF_PLANE0_PITCH_EXT,
+        EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT,
+        EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT
+    },
+    WlDmaBufBuffer::EGLPlaneAttribs {
+        EGL_DMA_BUF_PLANE1_FD_EXT,
+        EGL_DMA_BUF_PLANE1_OFFSET_EXT,
+        EGL_DMA_BUF_PLANE1_PITCH_EXT,
+        EGL_DMA_BUF_PLANE1_MODIFIER_LO_EXT,
+        EGL_DMA_BUF_PLANE1_MODIFIER_HI_EXT
+    },
+    WlDmaBufBuffer::EGLPlaneAttribs {
+        EGL_DMA_BUF_PLANE2_FD_EXT,
+        EGL_DMA_BUF_PLANE2_OFFSET_EXT,
+        EGL_DMA_BUF_PLANE2_PITCH_EXT,
+        EGL_DMA_BUF_PLANE2_MODIFIER_LO_EXT,
+        EGL_DMA_BUF_PLANE2_MODIFIER_HI_EXT
+    },
+    WlDmaBufBuffer::EGLPlaneAttribs {
+        EGL_DMA_BUF_PLANE3_FD_EXT,
+        EGL_DMA_BUF_PLANE3_OFFSET_EXT,
+        EGL_DMA_BUF_PLANE3_PITCH_EXT,
+        EGL_DMA_BUF_PLANE3_MODIFIER_LO_EXT,
+        EGL_DMA_BUF_PLANE3_MODIFIER_HI_EXT
+    }
+}};
 
 class LinuxDmaBufParams : public mir::wayland::LinuxBufferParamsV1
 {
@@ -589,7 +600,7 @@ private:
      * EGL_EXT_image_dma_buf_import_modifiers adds an extra plane.
      */
     std::array<PlaneInfo, 4> planes;
-    std::optional<uint64_t> modifier;
+    tl::optional<uint64_t> modifier;
     bool consumed;
     EGLDisplay dpy;
     std::shared_ptr<mg::EGLExtensions> egl_extensions;
@@ -730,7 +741,10 @@ private:
         auto const requested_modifier = modifier.value();
         for (auto i = 0u; i < formats->num_formats(); ++i)
         {
-            auto const& [supported_format, modifiers, external_only] = (*formats)[i];
+            auto const &format_descriptor = (*formats)[i];
+            auto const supported_format = format_descriptor.format;
+            auto const &modifiers = format_descriptor.modifiers;
+            auto const &external_only = format_descriptor.external_only;
 
             for (auto j = 0u ; j < modifiers.size(); ++j)
             {
@@ -885,6 +899,7 @@ bool drm_format_has_alpha(uint32_t format)
 
 class WaylandDmabufTexBuffer :
     public mg::BufferBasic,
+    public mg::NativeBufferBase,
     public mg::gl::Texture,
     public mg::DMABufBuffer
 {
@@ -1003,7 +1018,7 @@ public:
         return fourcc;
     }
 
-    auto modifier() const -> std::optional<uint64_t> override
+    auto modifier() const -> tl::optional<uint64_t> override
     {
         return modifier_;
     }
@@ -1027,7 +1042,7 @@ private:
     bool const has_alpha;
 
     std::vector<mg::DMABufBuffer::PlaneDescriptor> const planes_;
-    std::optional<uint64_t> const modifier_;
+    tl::optional<uint64_t> const modifier_;
     uint32_t const fourcc;
 
     std::shared_ptr<mir::Executor> const wayland_executor;
@@ -1051,7 +1066,9 @@ public:
     {
         for (auto i = 0u; i < this->formats->num_formats(); ++i)
         {
-            auto [format, modifiers, external_only] = (*(this->formats))[i];
+            auto const &format_descriptor = (*(this->formats))[i];
+            auto const format = format_descriptor.format;
+            auto const &modifiers = format_descriptor.modifiers;
 
             send_format_event(format);
             if (version_supports_modifier())

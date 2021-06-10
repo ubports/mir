@@ -20,10 +20,11 @@
 #define MIR_GRAPHICS_DMABUF_BUFFER_H_
 
 #include <cstdint>
-#include <optional>
+#include <vector>
 
 #include "mir/graphics/buffer.h"
 #include "mir/fd.h"
+#include "mir/graphics/optional.hpp"
 
 namespace mir
 {
@@ -55,7 +56,7 @@ public:
      *          format) and the kernel rejects any request where there are different
      *          modifiers for different planes.
      */
-    virtual auto modifier() const -> std::optional<uint64_t> = 0;
+    virtual auto modifier() const -> tl::optional<uint64_t> = 0;
 
     virtual auto planes() const -> std::vector<PlaneDescriptor> const& = 0;
 
