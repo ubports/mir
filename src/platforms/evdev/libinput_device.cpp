@@ -46,6 +46,8 @@
 #include <sstream>
 #include <algorithm>
 
+#include <iostream>
+
 namespace md = mir::dispatch;
 namespace mi = mir::input;
 namespace mie = mi::evdev;
@@ -318,6 +320,7 @@ mir::EventUPtr mie::LibInputDevice::convert_touch_frame(libinput_event_touch* to
         auto & id = it->first;
         auto & data = it->second;
 
+        std::cout << "Generating contact " << id << std::endl;
         contacts.push_back(events::ContactState{
                            id,
                            data.action,
@@ -332,8 +335,11 @@ mir::EventUPtr mie::LibInputDevice::convert_touch_frame(libinput_event_touch* to
         if (data.action == mir_touch_action_down)
             data.action = mir_touch_action_change;
 
-        if (data.action == mir_touch_action_up)
+        if (data.action == mir_touch_action_up) {
+            std::cout << "Removing from last_seen: " << id << std::endl; 
             it = last_seen_properties.erase(it);
+
+        }
         else
             ++it;
     }
@@ -345,6 +351,7 @@ void mie::LibInputDevice::handle_touch_down(libinput_event_touch* touch)
 {
     MirTouchId const id = libinput_event_touch_get_slot(touch);
     update_contact_data(last_seen_properties[id], mir_touch_action_down, touch);
+    std::cout << "Added touch down to last_seen: " << id << std::endl; 
 }
 
 void mie::LibInputDevice::handle_touch_up(libinput_event_touch* touch)
@@ -355,8 +362,10 @@ void mie::LibInputDevice::handle_touch_up(libinput_event_touch* touch)
     //the entry was deleted when the proper "up" event was received, but C++ map array
     //function will insta-create a new one otherwise
     auto const i = last_seen_properties.find(id);
-    if (i != end(last_seen_properties))
+    if (i != end(last_seen_properties)) {
         last_seen_properties[id].action = mir_touch_action_up;
+        std::cout << "Added touch up to last_seen: " << id << std::endl; 
+    }
 }
 
 void mie::LibInputDevice::update_contact_data(ContactData & data, MirTouchAction action, libinput_event_touch* touch)
@@ -380,6 +389,7 @@ void mie::LibInputDevice::handle_touch_motion(libinput_event_touch* touch)
 {
     MirTouchId const id = libinput_event_touch_get_slot(touch);
     update_contact_data(last_seen_properties[id], mir_touch_action_change, touch);
+    std::cout << "Motion touch " << id << std::endl;
 }
 
 mi::InputDeviceInfo mie::LibInputDevice::get_device_info()
