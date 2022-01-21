@@ -354,7 +354,8 @@ void mie::LibInputDevice::handle_touch_up(libinput_event_touch* touch)
     //"up" event is being received from a stupid panel this will create fake actions.
     //the entry was deleted when the proper "up" event was received, but C++ map array
     //function will insta-create a new one otherwise
-    if (last_seen_properties.count(id))
+    auto const i = last_seen_properties.find(id);
+    if (i != end(last_seen_properties))
         last_seen_properties[id].action = mir_touch_action_up;
 }
 
