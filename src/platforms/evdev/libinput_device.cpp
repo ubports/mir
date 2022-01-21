@@ -350,7 +350,12 @@ void mie::LibInputDevice::handle_touch_down(libinput_event_touch* touch)
 void mie::LibInputDevice::handle_touch_up(libinput_event_touch* touch)
 {
     MirTouchId const id = libinput_event_touch_get_slot(touch);
-    last_seen_properties[id].action = mir_touch_action_up;
+    //Only update this id if there is a valid record in the map. Otherwise, if an invalid 
+    //"up" event is being received from a stupid panel this will create fake actions.
+    //the entry was deleted when the proper "up" event was received, but C++ map array
+    //function will insta-create a new one otherwise
+    if (last_seen_properties.count(id))
+        last_seen_properties[id].action = mir_touch_action_up;
 }
 
 void mie::LibInputDevice::update_contact_data(ContactData & data, MirTouchAction action, libinput_event_touch* touch)
