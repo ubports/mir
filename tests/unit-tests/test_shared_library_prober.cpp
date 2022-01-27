@@ -172,7 +172,7 @@ MATCHER_P(FilenameMatches, matcher, "")
 }
 }
 
-TEST_F(SharedLibraryProber, logs_each_library_probed)
+TEST_F(SharedLibraryProber, DISABLED_logs_each_library_probed)
 {
     using namespace testing;
     NiceMock<MockSharedLibraryProberReport> report;
@@ -190,7 +190,7 @@ TEST_F(SharedLibraryProber, logs_each_library_probed)
     mir::libraries_for_path(library_path, report);
 }
 
-TEST_F(SharedLibraryProber, logs_failure_for_load_failure)
+TEST_F(SharedLibraryProber, DISABLED_logs_failure_for_load_failure)
 {
     using namespace testing;
     NiceMock<MockSharedLibraryProberReport> report;

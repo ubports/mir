@@ -323,7 +323,7 @@ TEST(SideBySideDisplayConfigurationPolicyTest, uses_all_connected_valid_outputs)
     });
 }
 
-TEST(SideBySideDisplayConfigurationPolicyTest, placement_respects_scale)
+TEST(SideBySideDisplayConfigurationPolicyTest, DISABLED_placement_respects_scale)
 {
     using namespace ::testing;
 

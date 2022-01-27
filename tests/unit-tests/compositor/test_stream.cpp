@@ -228,14 +228,14 @@ TEST_F(Stream, returns_buffers_to_client_when_told_to_bring_queue_up_to_date)
     EXPECT_THAT(buffers[2].use_count(), Eq(2));
 }
 
-TEST_F(Stream, stream_size_scaled)
+TEST_F(Stream, DISABLED_stream_size_scaled)
 {
     stream.submit_buffer(buffers[0]);
     stream.set_scale(2.0f);
     ASSERT_THAT(stream.stream_size(), Eq(initial_size / 2));
 }
 
-TEST_F(Stream, stream_remembers_scale_when_buffer_added)
+TEST_F(Stream, DISABLED_stream_remembers_scale_when_buffer_added)
 {
     stream.set_scale(2.0f);
     stream.submit_buffer(buffers[0]);

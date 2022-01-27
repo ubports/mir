@@ -393,7 +393,7 @@ TEST(DisplayConfiguration, output_extents_empty_when_there_are_no_modes)
     EXPECT_THAT(empty, Eq(out.extents()));
 }
 
-TEST(DisplayConfiguration, output_extents_are_scaled)
+TEST(DisplayConfiguration, DISABLED_output_extents_are_scaled)
 {
     mg::DisplayConfigurationOutput out = tmpl_output;
     out.scale = 2.0f;
@@ -403,7 +403,7 @@ TEST(DisplayConfiguration, output_extents_are_scaled)
         roundf(out.modes[out.current_mode_index].size.height.as_int() * 0.5)}));
 }
 
-TEST(DisplayConfiguration, output_extents_are_scaled_fractionally)
+TEST(DisplayConfiguration, DISABLED_output_extents_are_scaled_fractionally)
 {
     mg::DisplayConfigurationOutput out = tmpl_output;
     out.scale = 0.8f;
@@ -413,7 +413,7 @@ TEST(DisplayConfiguration, output_extents_are_scaled_fractionally)
         roundf(out.modes[out.current_mode_index].size.height.as_int() * 1.25)}));
 }
 
-TEST(DisplayConfiguration, user_display_configuration_output_extents_are_scaled)
+TEST(DisplayConfiguration, DISABLED_user_display_configuration_output_extents_are_scaled)
 {
     mg::DisplayConfigurationOutput out = tmpl_output;
     mg::UserDisplayConfigurationOutput user{out};
@@ -424,7 +424,7 @@ TEST(DisplayConfiguration, user_display_configuration_output_extents_are_scaled)
         roundf(out.modes[out.current_mode_index].size.height.as_int() * 0.5)}));
 }
 
-TEST(DisplayConfiguration, user_display_configuration_output_extents_are_scaled_fractionally)
+TEST(DisplayConfiguration, DISABLED_user_display_configuration_output_extents_are_scaled_fractionally)
 {
     mg::DisplayConfigurationOutput out = tmpl_output;
     mg::UserDisplayConfigurationOutput user{out};

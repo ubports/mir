@@ -132,14 +132,14 @@ TEST_F(Tessellation, vertex_zs_are_1)
     }
 }
 
-TEST_F(Tessellation, tex_coords_0_or_1)
+TEST_F(Tessellation, DISABLED_tex_coords_0_or_1)
 {
     int const x{3}, y{8};
     mgl::Primitive const primitive = mgl::tessellate_renderable_into_rectangle(renderable, {x, y});
     expect_tex_coords_1_or_0(primitive);
 }
 
-TEST_F(Tessellation, tex_coords_0_or_1_when_transformed)
+TEST_F(Tessellation, DISABLED_tex_coords_0_or_1_when_transformed)
 {
     int const x{3}, y{8};
     ON_CALL(renderable, transformation())
