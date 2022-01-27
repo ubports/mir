@@ -234,7 +234,7 @@ TEST_F(NestedBuffer, binds_to_texture)
     texture_source->gl_bind_to_texture();
 }
 
-TEST_F(NestedBuffer, binds_to_texture_gl_buffer)
+TEST_F(NestedBuffer, DISABLED_binds_to_texture_gl_buffer)
 {
     auto pf = sw_properties.format;
     auto format = GL_RGBA;
