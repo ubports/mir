@@ -604,8 +604,8 @@ TEST_F(LibInputDeviceOnTouchScreen, process_event_does_not_ignore_valid_touch_ev
     float orientation = 0;
 
     InSequence seq;
-    EXPECT_CALL(mock_builder, touch_event(_, _)).Times(0);
-    EXPECT_CALL(mock_sink, handle_input(_)).Times(0);
+    EXPECT_CALL(mock_builder, touch_event(_, _)).Times(1);
+    EXPECT_CALL(mock_sink, handle_input(_)).Times(1);
 
     touch_screen.start(&mock_sink, &mock_builder);
     env.mock_libinput.setup_touch_event(fake_device, LIBINPUT_EVENT_TOUCH_DOWN, event_time_1, slot1, x, y, major, minor,
