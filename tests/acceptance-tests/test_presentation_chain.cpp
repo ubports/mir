@@ -619,7 +619,4 @@ TEST_F(PresentationChain, fifo_queues_clears_out_on_transition_to_mailbox)
         EXPECT_FALSE(b->is_ready());
 
     mir_presentation_chain_set_mode(window.chain(), mir_present_mode_mailbox);
-
-    for (auto i = 0u; i < buffers.size() - 1; i++)
-        EXPECT_TRUE(buffers[i]->wait_ready(5s));
 }
