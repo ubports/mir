@@ -1290,7 +1290,7 @@ void mf::SessionMediator::configure_buffer_stream(
         BOOST_THROW_EXCEPTION(std::logic_error("Invalid application session"));
 
     auto stream = mir_client_session->buffer_stream(mf::BufferStreamId(request->id().value()));
-    stream->allow_framedropping(true);
+    stream->allow_framedropping(false);
     if (request->has_scale())
         stream->set_scale(request->scale());
 
